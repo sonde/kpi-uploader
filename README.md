@@ -52,13 +52,13 @@ KPI 2: Setting cell 'Cloud migration KPIs!B4:B4' to: 05-02-2020 (last update)
 
 The resulting Google spreadsheet data sheet will look similar to this after a week `2020-06` run:
 
-Last update | KPI                                              | Month Week | Jan 2020-04 | Jan 2020-05 | Feb `2020-06` | Feb 2020-07
-:---------: | :----------------------------------------------- | ---:  | ------: | ------: |    ---: | ---:
-2020-02-05  | Number of applications not migrated              |       | 29      | 29      | 26      |
-2020-02-05  | Number of servers in old datacenter              |       | 350     | 340     | 330     |
-2020-02-05  | Number of applications migrated to cloud         |       | 0       | 0       |       0 |
-2020-02-05  | Number of apps passing cloud acceptance criteria |       | 100     | 110     | 123 |
-2020-02-05  | Number of applications and servers in old DC     |       | 800     | 700     | 600 |
+Last update  | KPI                                              | Month Week | Jan `2020-04` | Jan `2020-05` | Feb `2020-06` | Feb `2020-07`
+:----------: | :----------------------------------------------- | ---:  | ------: | ------: |    ---: | ---:
+`2020-02-05` | Number of applications not migrated              |       | 29      | 29      | 26      |
+`2020-02-05` | Number of servers in old datacenter              |       | 350     | 340     | 330     |
+`2020-02-05` | Number of applications migrated to cloud         |       | 0       | 0       |       0 |
+`2020-02-05` | Number of apps passing cloud acceptance criteria |       | 100     | 110     | 123 |
+`2020-02-05` | Number of applications and servers in old DC     |       | 800     | 700     | 600 |
 
 Next week, when run, `kpi-uploader` will add numbers to the `2020-07`
 column for the specified KPIs.
