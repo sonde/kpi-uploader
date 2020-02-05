@@ -27,7 +27,7 @@ KPI:
 ```
 
 Make sure the `spreadsheet-id` corresponds to a API uploader compatible Google 
-spreadsheet, you can find n example here (TBD).
+spreadsheet, you can find n example [here](https://docs.google.com/spreadsheets/d/1V5Uu8Wu20S95vJ45gGm_OiRr2QUsLd5PxUhhK3EHBxc/edit).
 Make sure `sheet-name` corresponds to the sheet name you use to store KPI data.
 See `config.yaml-example` for ideas on how to use.
 
