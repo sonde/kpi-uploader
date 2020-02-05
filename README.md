@@ -3,7 +3,9 @@
 
 `kpi-uploader` reads `config.yaml` and uploads this weeks values for
 one or more KPIs to the correct week in the specified Google
-spreadsheet and sheet name.
+spreadsheet and sheet name. The Google spreadsheet needs to be shared
+with Edit rights with a G Suite service account using a secret.json
+file (see below for how to create a Google service account).
 
 The config file:
 ```
