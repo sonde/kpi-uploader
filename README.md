@@ -52,7 +52,7 @@ KPI 2: Setting cell 'Cloud migration KPIs!B4:B4' to: 05-02-2020 (last update)
 
 The resulting Google spreadsheet data sheet will look similar to this after a week `2020-06` run:
 
-|           |                                           Month|    |Jan	|Jan|	Feb|	Feb|
+|&#xfeff;   |                                           Month|    |Jan	|Jan|	Feb|	Feb|
 |Last update|KPI                                         Week|    |2020-04|	2020-05| 2020-06|2020-07|
 |:---------:|:-----------------------------------------------|----|------:|---------:|----:|-----:|
 |2020-02-05 |Number of applications not migrated             |    |29|	29|	26||
