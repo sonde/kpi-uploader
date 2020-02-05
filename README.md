@@ -28,7 +28,7 @@ KPI:
 [...]
 ```
 
-Make sure the `spreadsheet-id` corresponds to a API uploader compatible Google 
+Make sure the `spreadsheet-id` corresponds to a API uploader compatible Google
 spreadsheet, see the provided [example Google KPI spreadsheet](https://docs.google.com/spreadsheets/d/1V5Uu8Wu20S95vJ45gGm_OiRr2QUsLd5PxUhhK3EHBxc/edit#gid=750502480).
 Make sure `sheet-name` corresponds to the sheet name you use to store KPI data.
 See `config.yaml-example` for ideas on how to use.
@@ -41,9 +41,11 @@ You need to create a G Suite service account, for instance follow
 
 ## Build and run
 ```
-go mod init
-go mod tidy
-go build ./... && ./kpi-uploader
+$ ls
+LICENSE	  README.md   config.yaml   main.go   secret.json   var
+$ go mod init
+$ go mod tidy
+$ go build ./... && ./kpi-uploader
 ```
 
 ## Example
