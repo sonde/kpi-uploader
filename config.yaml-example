@@ -1,0 +1,48 @@
+# The ID of the Google spreadsheet containing the KPI data logging setup
+spreadsheet-id: "1CYQIbU3KIxxpab2JC0jSUNSIbW0x4SbsRa6AYedA_a3"
+# The name of the sheet that will contain the weekly KPI data
+sheet-name: "Cloud migration KPIs"
+sheet-kpi-last-update-col: "B" # The column where 'Last update' will be logged
+sheet-kpi-name-col: "C"        # The column where 'KPI title' will be logged
+sheet-data-start-col: "E"      # The column for the first week of data
+sheet-data-date-row: 2         # The row where year-week numbers are
+
+KPI:
+  - KPI1:
+    title: "Number of applications not migrated"
+    sheet-row: 3
+    kpi-command: "cat"
+    kpi-command-args: "var/number-of-applications-not-migrated.txt"
+    # The KPI file is regularly updated by a script that query 
+    # the release pipeline
+
+  - KPI2:
+    title: "Number of servers in D7"
+    sheet-row: 4
+    kpi-command: "cat"
+    kpi-command-args: "var/number-of-servers-in-old-datacenter.txt"
+    # The file holding the 'Number of physical and virtual servers' is 
+    # regularly updated by a script querying Puppet.
+
+  - KPI3:
+    title: "Number of applications migrated to cloud"
+    sheet-row: 5
+    kpi-command: "cat"
+    kpi-command-args: "var/number-of-migrated-applications-to-cloud.txt"
+    # The file is updated regularly by separate script querying the release pipeline
+    # Remember cake when 1 app, 10 apps, 100 apps goals are reached!
+
+  - KPI4:
+    title: "Number of apps passing cloud acceptance criteria"
+    sheet-row: 6
+    kpi-command: "cat"
+    kpi-command-args: "var/number-of-apps-passing-cloud-acceptance-criteria.txt"
+    # The file is regularly updated by separate script querying Prometheus
+
+  - KPI5:
+    title: "Number of applications and servers in old DC"
+    sheet-row: 7
+    kpi-command: "cat"
+    kpi-command-args: "var/number-of-applications-and-servers-in-old-dc.txt"
+    # The primary cloud migration completeness KPI – we are done when the number is zero
+    # The file is regularly updated by separate script
