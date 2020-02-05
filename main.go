@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -46,21 +45,7 @@ func parseConfigYaml(configYaml string) *Config {
 	var cfg Config
 	decoder := yaml.NewDecoder(f)
 	checkError(decoder.Decode(&cfg))
-
-	//fmt.Printf("Config:\n")
-	//PrettyPrint(cfg)
 	return &cfg
-}
-
-// PrettyPrint anything (conveniance function)
-func PrettyPrint(v interface{}) (err error) {
-	b, err := json.MarshalIndent(v, "", "  ")
-	if err == nil {
-		fmt.Println(string(b))
-	} else {
-		fmt.Printf("Could not pretty rpint: %v\n", v)
-	}
-	return err
 }
 
 // checkError just abort if anything fails
@@ -82,7 +67,6 @@ func connectToGoogleSheet(clientSecretFile string) (*sheets.Service, error) {
 }
 
 func main() {
-
 	cfg := parseConfigYaml(configYaml)
 
 	srv, err := connectToGoogleSheet(clientSecretFile)
@@ -144,33 +128,33 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 	 */
 	for i, kpi := range cfg.KPI {
 
+		// Run KPI colleting command
+		cmd := exec.Command(kpi.KPICommand, kpi.KPICommandArgs)
+		tmpOut, err := cmd.CombinedOutput()
+		var out int
+		if err != nil {
+			log.Fatalf("cmd.Run() failed with %s\n", err)
+		}
+		fmt.Sscanf(string(tmpOut), "%d", &out)
+
 		// Write KPI title
-		cell := cfg.SheetName + "!" + cfg.SheetKPINameCol + kpi.SheetRow + ":" +
+		cell := cfg.SheetName + "!" +
+			cfg.SheetKPINameCol + kpi.SheetRow + ":" +
 			cfg.SheetKPINameCol + kpi.SheetRow
 		fmt.Printf("KPI %v: Setting cell '%v' to: '%s' (KPI title)\n",
 			i+1, cell, kpi.Title)
 		vr.Values[0] = []interface{}{kpi.Title}
-		_, err := srv.Spreadsheets.Values.Update(cfg.SpreadsheetID,
+		_, err = srv.Spreadsheets.Values.Update(cfg.SpreadsheetID,
 			cell, &vr).
 			ValueInputOption("RAW").Do()
 		if err != nil {
 			log.Fatalf("Unable to write data to sheet: %v\n", err)
 		}
 
-		// Run KPI colleting command
-		cmd := exec.Command(kpi.KPICommand, kpi.KPICommandArgs)
-		tmpOut, err := cmd.CombinedOutput()
-		out := 0
-		fmt.Sscanf(string(tmpOut), "%d", &out)
-		//out, err := strconv.Atoi(string(tmpOut))
-		if err != nil {
-			log.Fatalf("cmd.Run() failed with %s\n", err)
-		}
-		//fmt.Printf("combined out: %s\n", out)
-
 		// Write KPI data
-		cell = cfg.SheetName + "!" + dataWeekColLetter +
-			kpi.SheetRow + ":" + dataWeekColLetter + kpi.SheetRow
+		cell = cfg.SheetName + "!" +
+			dataWeekColLetter + kpi.SheetRow + ":" +
+			dataWeekColLetter + kpi.SheetRow
 		fmt.Printf("KPI %v: Setting cell '%v' to: %d (KPI value for week %s)\n",
 			i+1, cell, out, nowYearWeek)
 		vr.Values[0] = []interface{}{out}
@@ -182,8 +166,9 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 		}
 
 		// Update the 'last updated' date
-		cell = cfg.SheetName + "!" + cfg.SheetKPILastUpdateCol +
-			kpi.SheetRow + ":" + cfg.SheetKPILastUpdateCol + kpi.SheetRow
+		cell = cfg.SheetName + "!" +
+			cfg.SheetKPILastUpdateCol + kpi.SheetRow + ":" +
+			cfg.SheetKPILastUpdateCol + kpi.SheetRow
 		fmt.Printf("KPI %v: Setting cell '%v' to: %s (last update)\n",
 			i+1, cell, lastUpdateDate)
 		vr.Values[0] = []interface{}{lastUpdateDate}

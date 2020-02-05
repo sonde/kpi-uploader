@@ -1,0 +1,6 @@
+config.yaml
+go.mod
+go.sum
+kpi-uploader
+secret.json
+etc
