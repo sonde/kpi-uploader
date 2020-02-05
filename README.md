@@ -31,6 +31,12 @@ spreadsheet, see the provided [example Google KPI spreadsheet](https://docs.goog
 Make sure `sheet-name` corresponds to the sheet name you use to store KPI data.
 See `config.yaml-example` for ideas on how to use.
 
+## Create a G Suite service account
+You need to create a G Suite service account, for instance follow
+[Create a new project in Google Developer Console](https://www.prudentdevs.club/gsheets-go).
+1. Make sure to name the secrets JSON file `secret.json`
+2. Make sure to Share your Google spreadsheet with the `client_email` specified in the `secrets.json` file (*something*@*something*.iam.gserviceaccount.com).
+
 ## Build and run
 ```
 go mod init
