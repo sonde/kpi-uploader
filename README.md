@@ -64,6 +64,15 @@ Last update|KPI                                         Week|    |2020-04|2020-0
 Next week, when run, kpi-uploader will add numbers to the `2020-07`
 column for the specified KPIs.
 
+Table test
+
+&#xfeff;      | 1 core  | 2 cores | 4 cores | 6 cores
+------------- | ------- | ------- | ------- | -----------------
+CPU 1, Core 1 | network | network | network | network + haproxy
+CPU 1, Core 2 | haproxy | haproxy | haproxy | TLS
+CPU 1, Core 3 | TLS     | TLS     | TLS     | TLS
+CPU 1, Core 4 | -       | TLS     | TLS     | TLS
+
 ## Improvements
 This is a crude implementation, possible enhancements could include:
 1. Built in support for querying and parsing of Prometheus metrics etc
