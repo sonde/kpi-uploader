@@ -42,7 +42,7 @@ You need to create a G Suite service account, for instance follow
 ## Build and run
 ```
 $ ls
-LICENSE	  README.md   config.yaml   main.go   secret.json   var
+LICENSE	  README.md   config.yaml   main.go   secret.json   var/
 $ go mod init
 $ go mod tidy
 $ go build ./... && ./kpi-uploader
@@ -77,3 +77,4 @@ column for the specified KPIs.
 This is a crude implementation, possible enhancements could include:
 1. Built in support for querying and parsing of Prometheus metrics etc
 2. Support for only uplading oen KPI at a time
+3. Abort the update if the KPI title has conflicting content
