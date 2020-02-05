@@ -1,7 +1,7 @@
 # The ID of the Google spreadsheet containing the KPI data logging setup
 spreadsheet-id: "1CYQIbU3KIxxpab2JC0jSUNSIbW0x4SbsRa6AYedA_a3"
 # The name of the sheet that will contain the weekly KPI data
-sheet-name: "Cloud migration KPIs"
+sheet-name: "KPI data"
 sheet-kpi-last-update-col: "B" # The column where 'Last update' will be logged
 sheet-kpi-name-col: "C"        # The column where 'KPI title' will be logged
 sheet-data-start-col: "E"      # The column for the first week of data

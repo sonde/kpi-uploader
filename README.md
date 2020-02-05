@@ -10,7 +10,7 @@ The config file:
 # The ID of the Google spreadsheet containing the KPI data logging setup
 spreadsheet-id: "1CYQIbU3KIxxpab2JC0jSUNSIbW0x4SbsRa6AYedA_a3"
 # The name of the sheet that will contain the weekly KPI data
-sheet-name: "Cloud migration KPIs"
+sheet-name: "KPI data"
 sheet-kpi-last-update-col: "B" # The column where 'Last update' will be logged
 sheet-kpi-name-col: "C"        # The column where 'KPI title' will be logged
 sheet-data-start-col: "E"      # The column for the first week of data
@@ -47,12 +47,12 @@ go build ./... && ./kpi-uploader
 ## Example
 ```
 $ go build ./... && ./kpi-uploader
-KPI 1: Setting cell 'Cloud migration KPIs!C3:C3' to: 'Number of applications not migrated' (KPI title)
-KPI 1: Setting cell 'Cloud migration KPIs!J3:J3' to: 26 (KPI value for week 2020-06)
-KPI 1: Setting cell 'Cloud migration KPIs!B3:B3' to: 05-02-2020 (last update)
-KPI 2: Setting cell 'Cloud migration KPIs!C4:C4' to: 'Number of servers in old datacenter' (KPI title)
-KPI 2: Setting cell 'Cloud migration KPIs!J4:J4' to: 330 (KPI value for week 2020-06)
-KPI 2: Setting cell 'Cloud migration KPIs!B4:B4' to: 05-02-2020 (last update)
+KPI 1: Setting cell 'KPI data!C3:C3' to: 'Number of applications not migrated' (KPI title)
+KPI 1: Setting cell 'KPI data!J3:J3' to: 26 (KPI value for week 2020-06)
+KPI 1: Setting cell 'KPI data!B3:B3' to: 05-02-2020 (last update)
+KPI 2: Setting cell 'KPI data!C4:C4' to: 'Number of servers in old datacenter' (KPI title)
+KPI 2: Setting cell 'KPI data!J4:J4' to: 330 (KPI value for week 2020-06)
+KPI 2: Setting cell 'KPI data!B4:B4' to: 05-02-2020 (last update)
 [...]
 ```
 
