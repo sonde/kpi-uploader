@@ -3,4 +3,7 @@ go.mod
 go.sum
 kpi-uploader
 secret.json
+TODO.md
 etc
+var/*
+bin/*

@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"time"
+
+	"github.com/tidwall/gjson"
 
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
@@ -28,6 +31,8 @@ type Config struct {
 		SheetRow       string `yaml:"sheet-row"`
 		KPICommand     string `yaml:"kpi-command"`
 		KPICommandArgs string `yaml:"kpi-command-args"`
+		JSONEndpoint   string `yaml:"json-endpoint"`
+		JSONDataPicker string `yaml:"json-data-picker"`
 	} `yaml:"KPI"`
 }
 
@@ -128,14 +133,29 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 	 */
 	for i, kpi := range cfg.KPI {
 
-		// Run KPI colleting command
-		cmd := exec.Command(kpi.KPICommand, kpi.KPICommandArgs)
-		tmpOut, err := cmd.CombinedOutput()
+		//log.Printf("Debug[%s]: JSONEndpoint: %s\n", kpi.Title, kpi.JSONEndpoint)
 		var out int
-		if err != nil {
-			log.Fatalf("cmd.Run() failed with %s\n", err)
+		// Run the Web scrape command (if defined)
+		if len(kpi.JSONEndpoint) > 0 {
+
+			out = scrapeToJSON(kpi.JSONEndpoint, kpi.JSONDataPicker)
+
+		} else if len(kpi.KPICommand) > 0 {
+
+			// Run KPI colleting command
+			cmd := exec.Command(kpi.KPICommand, kpi.KPICommandArgs)
+			tmpOut, err := cmd.CombinedOutput()
+			if err != nil {
+				log.Fatalf("cmd.Run() failed with %s\n", err)
+			}
+			fmt.Sscanf(string(tmpOut), "%d", &out)
+
+		} else {
+
+			log.Printf("Warning: No command to be run for: %s\n", kpi.Title)
+			continue
+
 		}
-		fmt.Sscanf(string(tmpOut), "%d", &out)
 
 		// Write KPI title
 		cell := cfg.SheetName + "!" +
@@ -180,6 +200,40 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 		}
 
 	}
+}
+
+func scrapeToJSON(uri string, dataPicker string) int {
+	if len(uri) == 0 {
+		return -1
+	}
+
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	// Make request
+	response, err := client.Get(uri)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer response.Body.Close()
+	//log.Printf("response: %s\n", response.Body)
+
+	// Get the response body as a string
+	dataInBytes, err := ioutil.ReadAll(response.Body)
+	pageContent := string(dataInBytes)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	value := gjson.Get(pageContent, dataPicker)
+
+	var out int
+	fmt.Sscanf(value.String(), "%d", &out)
+
+	return out
 }
 
 // This is copied from https://github.com/takuoki/clmconv
