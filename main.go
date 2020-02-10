@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -10,6 +9,7 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/takuoki/clmconv"
 	"github.com/tidwall/gjson"
 
 	"golang.org/x/net/context"
@@ -118,8 +118,8 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 	}
 
 	// Calculate the column letter (cfg.SheetDataStartCol + dateOffset)
-	dataStartColNum, err := Atoi(cfg.SheetDataStartCol)
-	dataWeekColLetter := Itoa(dataStartColNum + dateOffset)
+	dataStartColNum, err := clmconv.Atoi(cfg.SheetDataStartCol)
+	dataWeekColLetter := clmconv.Itoa(dataStartColNum + dateOffset)
 
 	// Initialize the value setting vessel
 	var vr sheets.ValueRange
@@ -234,51 +234,4 @@ func scrapeToJSON(uri string, dataPicker string) int {
 	fmt.Sscanf(value.String(), "%d", &out)
 
 	return out
-}
-
-// This is copied from https://github.com/takuoki/clmconv
-// - Neither GO Modules or go dependencies can find takuoki/clmconv (why?)
-var pow26tab = [...]int{1, 26, 676, 17576, 456976, 11881376}
-
-func pow26(n int) int {
-	if 0 <= n && n <= 5 {
-		return pow26tab[n]
-	}
-	return pow26(n-1) * 26
-}
-
-// Atoi converts alphabet to number.
-func Atoi(s string) (int, error) {
-	if s == "" {
-		return 0, errors.New("argument is empty string")
-	}
-	var r int
-	for i, c := range s {
-		if 'A' <= c && c <= 'Z' {
-			r += (int(c) - 64) * pow26(len(s)-i-1)
-		} else if 'a' <= c && c <= 'z' {
-			r += (int(c) - 96) * pow26(len(s)-i-1)
-		} else {
-			return 0, errors.New("must not contain non-alphabetic characters")
-		}
-	}
-	return r - 1, nil
-}
-
-// Itoa converts number to alphabet.
-// If argument is negative, returns empty string.
-func Itoa(i int) string {
-	if i < 0 {
-		return ""
-	}
-	var r []rune
-	for c := 0; ; c++ {
-		mod := i%pow26(c+1) + 1
-		r = append([]rune{rune(mod/pow26(c) + 64)}, r...)
-		i -= mod
-		if i <= 0 {
-			break
-		}
-	}
-	return string(r)
 }
