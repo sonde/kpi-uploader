@@ -7,7 +7,7 @@ spreadsheet and sheet name. The Google spreadsheet needs to be shared
 with Edit rights with a G Suite service account using a secret.json
 file (see below for how to create a Google service account).
 
-The config file:
+The `config.yaml` config file:
 ```
 # The ID of the Google spreadsheet containing the KPI data logging setup
 spreadsheet-id: "1CYQIbU3KIxxpab2JC0jSUNSIbW0x4SbsRa6AYedA_a3"
