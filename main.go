@@ -29,14 +29,17 @@ type Config struct {
 	SheetKPINameCol       string `yaml:"sheet-kpi-name-col"`
 	SheetDataStartCol     string `yaml:"sheet-data-start-col"`
 	SheetDataDateRow      string `yaml:"sheet-data-date-row"`
-	KPI                   []struct {
-		Title          string `yaml:"title"`
-		SheetRow       string `yaml:"sheet-row"`
-		KPICommand     string `yaml:"kpi-command"`
-		KPICommandArgs string `yaml:"kpi-command-args"`
-		JSONEndpoint   string `yaml:"json-endpoint"`
-		JSONDataPicker string `yaml:"json-data-picker"`
-	} `yaml:"KPI"`
+	KPI                   []KPIs `yaml:"KPI"`
+}
+
+// The KPIs struct holds the array of KPIs
+type KPIs struct {
+	Title          string `yaml:"title"`
+	SheetRow       string `yaml:"sheet-row"`
+	KPICommand     string `yaml:"kpi-command"`
+	KPICommandArgs string `yaml:"kpi-command-args"`
+	JSONEndpoint   string `yaml:"json-endpoint"`
+	JSONDataPicker string `yaml:"json-data-picker"`
 }
 
 const (
@@ -155,17 +158,8 @@ func main() {
 	logger.Info("Shutting down")
 }
 
-// updateKPIGoogleSheet updates the Google Spreadsheet
-func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
-
-	// Construct the string matching this week ("YYYY-WW")
-	tn := time.Now().UTC()
-	year, week := tn.ISOWeek()
-	nowYearWeek := fmt.Sprintf("%d-%02d", year, week)
-	lastUpdateDate := time.Now().Format("2006-01-02")
-	logger.Info("Current Week is ", nowYearWeek)
-
-	// Find the right week for this run
+// findThisWeekInSheet calculates the Column letter for this week
+func findThisWeekColumnLetter(cfg *Config, srv *sheets.Service, nowYearWeek string) string {
 	yearWeekRow := cfg.SheetName + "!" + cfg.SheetDataStartCol +
 		cfg.SheetDataDateRow + ":" + cfg.SheetDataDateRow
 	resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID,
@@ -199,7 +193,21 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 
 	// Calculate the column letter (cfg.SheetDataStartCol + dateOffset)
 	dataStartColNum, err := clmconv.Atoi(cfg.SheetDataStartCol)
-	dataWeekColLetter := clmconv.Itoa(dataStartColNum + dateOffset)
+	return clmconv.Itoa(dataStartColNum + dateOffset)
+}
+
+// updateKPIGoogleSheet updates the Google Spreadsheet
+func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
+
+	// Construct the string matching this week ("YYYY-WW")
+	tn := time.Now().UTC()
+	year, week := tn.ISOWeek()
+	nowYearWeek := fmt.Sprintf("%d-%02d", year, week)
+	lastUpdateDate := time.Now().Format("2006-01-02")
+	logger.Info("Current Week is ", nowYearWeek)
+
+	// Calculates the Column letter for this week
+	dataWeekColLetter := findThisWeekColumnLetter(cfg, srv, nowYearWeek)
 
 	// Initialize the value setting vessel
 	var vr sheets.ValueRange
@@ -213,57 +221,18 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 	 */
 	for i, kpi := range cfg.KPI {
 
-		//log.Printf("Debug[%s]: JSONEndpoint: %s\n", kpi.Title, kpi.JSONEndpoint)
-		var out int
-		// Run the Web scrape command (if defined)
-		if len(kpi.JSONEndpoint) > 0 {
-
-			out = scrapeToJSON(kpi.JSONEndpoint, kpi.JSONDataPicker)
-
-		} else if len(kpi.KPICommand) > 0 {
-
-			// Run KPI colleting command
-			cmd := exec.Command(kpi.KPICommand, kpi.KPICommandArgs)
-			tmpOut, err := cmd.CombinedOutput()
-			if err != nil {
-				logger.WithFields(log.Fields{
-					"kpi":     kpi.Title,
-					"error":   err,
-					"command": kpi.KPICommand + " " + kpi.KPICommandArgs,
-				}).Fatal("Running external command")
-			}
-			fmt.Sscanf(string(tmpOut), "%d", &out) // Catch the result number
-
-		} else {
-
-			logger.WithFields(log.Fields{
-				"kpi": kpi.Title,
-			}).Warning("No way to gather data")
+		ok, out := scrapeEndpoint(&kpi)
+		if !ok {
 			continue
-
 		}
 
 		// Write KPI title
 		cell := cfg.SheetName + "!" +
 			cfg.SheetKPINameCol + kpi.SheetRow + ":" +
 			cfg.SheetKPINameCol + kpi.SheetRow
-		logger.WithFields(log.Fields{
-			"kpiNum": i + 1, "cell": cell, "kpi": kpi.Title,
-		}).Info("Setting KPI title")
 
-		vr.Values[0] = []interface{}{kpi.Title}
-		_, err = srv.Spreadsheets.Values.Update(cfg.SpreadsheetID,
-			cell, &vr).
-			ValueInputOption("RAW").Do()
-		if err != nil {
-			logger.WithFields(log.Fields{
-				"kpi":         kpi.Title,
-				"error":       err,
-				"spreadsheet": cfg.SpreadsheetID,
-				"sheet":       cell,
-				"value":       out,
-			}).Fatal("Writing  to sheet")
-		}
+		// Write KPI title
+		writeSheetCell(&kpi, cell, out, cfg, srv, &vr)
 
 		// Write KPI value
 		cell = cfg.SheetName + "!" +
@@ -274,7 +243,7 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 		}).Info("Setting KPI value")
 
 		vr.Values[0] = []interface{}{out}
-		_, err = srv.Spreadsheets.Values.Update(cfg.SpreadsheetID,
+		_, err := srv.Spreadsheets.Values.Update(cfg.SpreadsheetID,
 			cell, &vr).
 			ValueInputOption("USER_ENTERED").Do()
 		if err != nil {
@@ -309,6 +278,61 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 				"value":       out,
 			}).Fatal("Unable to write data to sheet")
 		}
+	}
+}
+
+func scrapeEndpoint(kpi *KPIs) (bool, int) {
+	//log.Printf("Debug[%s]: JSONEndpoint: %s\n", kpi.Title, kpi.JSONEndpoint)
+	var out int
+	// Run the Web scrape command (if defined)
+	if len(kpi.JSONEndpoint) > 0 {
+
+		out = scrapeToJSON(kpi.JSONEndpoint, kpi.JSONDataPicker)
+		return true, out
+
+	} else if len(kpi.KPICommand) > 0 {
+
+		// Run KPI colleting command
+		cmd := exec.Command(kpi.KPICommand, kpi.KPICommandArgs)
+		tmpOut, err := cmd.CombinedOutput()
+		if err != nil {
+			logger.WithFields(log.Fields{
+				"kpi":     kpi.Title,
+				"error":   err,
+				"command": kpi.KPICommand + " " + kpi.KPICommandArgs,
+			}).Fatal("Running external command")
+		}
+		fmt.Sscanf(string(tmpOut), "%d", &out) // Catch the result number
+		return true, out
+
+	} else {
+
+		logger.WithFields(log.Fields{
+			"kpi": kpi.Title,
+		}).Warning("No way to gather data")
+		return false, -1
+
+	}
+}
+
+func writeSheetCell(kpi *KPIs, cell string, out int, cfg *Config, srv *sheets.Service, vr *sheets.ValueRange) {
+
+	logger.WithFields(log.Fields{
+		"cell": cell, "kpi": kpi.Title,
+	}).Info("Setting KPI title")
+
+	vr.Values[0] = []interface{}{kpi.Title}
+	_, err := srv.Spreadsheets.Values.Update(cfg.SpreadsheetID,
+		cell, vr).
+		ValueInputOption("RAW").Do()
+	if err != nil {
+		logger.WithFields(log.Fields{
+			"kpi":         kpi.Title,
+			"error":       err,
+			"spreadsheet": cfg.SpreadsheetID,
+			"sheet":       cell,
+			"value":       out,
+		}).Fatal("Writing  to sheet")
 	}
 }
 
