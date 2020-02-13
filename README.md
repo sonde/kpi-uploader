@@ -71,7 +71,7 @@ $ LOG_FORMAT=json LOG_LEVEL=INFO ./kpi-uploader
 {"@timestamp":"2020-02-13T17:43:18.953471+01:00","@version":"1","caller":"main.updateKPIGoogleSheet","cell":"Cloud migration data!K7:K7","file":".../kpi-uploader/main.go:273","kpiNum":4,"level":"info","logger":"kpi-uploader","message":"Setting KPI value","value":321,"week":"2020-07"}
 {"@timestamp":"2020-02-13T17:43:19.202086+01:00","@version":"1","caller":"main.updateKPIGoogleSheet","cell":"Cloud migration data!B7:B7","file":".../kpi-uploader/main.go:296","kpiNum":4,"level":"info","logger":"kpi-uploader","message":"Setting last updated date","value":"2020-02-13"}
 {"@timestamp":"2020-02-13T17:43:19.451793+01:00","@version":"1","caller":"main.updateKPIGoogleSheet","file":".../kpi-uploader/main.go:240","kpi":"Number of applications in D7","level":"warning","logger":"kpi-uploader","message":"No command to run"}
-
+[...]
 ```
 
 The resulting Google spreadsheet data sheet will look similar to this after a week `2020-06` run:
