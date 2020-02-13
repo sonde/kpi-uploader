@@ -11,18 +11,14 @@ KPI:
   - KPI1:
     title: "Number of applications not migrated"
     sheet-row: 3
-    kpi-command: "cat"
-    kpi-command-args: "var/number-of-applications-not-migrated.txt"
-    # The KPI file is regularly updated by a script that query 
-    # the release pipeline
+    kpi-command: "./bin/count_number_legacy_apps"
 
   - KPI2:
-    title: "Number of servers in D7"
+    title: "Number of servers in old datacenter"
     sheet-row: 4
-    kpi-command: "cat"
-    kpi-command-args: "var/number-of-servers-in-old-datacenter.txt"
-    # The file holding the 'Number of physical and virtual servers' is 
-    # regularly updated by a script querying Puppet.
+    json-endpoint: "https://prometheus.company.com/query?query=count(up{job=%27prometheus_node_exporter%27})"
+    json-data-picker: "data.result.0.value.1"
+    # Format: {"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1581497668.761,"321"]}]}}
 
   - KPI3:
     title: "Number of applications migrated to cloud"
@@ -31,18 +27,3 @@ KPI:
     kpi-command-args: "var/number-of-migrated-applications-to-cloud.txt"
     # The file is updated regularly by separate script querying the release pipeline
     # Remember cake when 1 app, 10 apps, 100 apps goals are reached!
-
-  - KPI4:
-    title: "Number of apps passing cloud acceptance criteria"
-    sheet-row: 6
-    kpi-command: "cat"
-    kpi-command-args: "var/number-of-apps-passing-cloud-acceptance-criteria.txt"
-    # The file is regularly updated by separate script querying Prometheus
-
-  - KPI5:
-    title: "Number of applications and servers in old DC"
-    sheet-row: 7
-    kpi-command: "cat"
-    kpi-command-args: "var/number-of-applications-and-servers-in-old-dc.txt"
-    # The primary cloud migration completeness KPI – we are done when the number is zero
-    # The file is regularly updated by separate script
