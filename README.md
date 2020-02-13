@@ -53,9 +53,9 @@ $ go build ./... && ./kpi-uploader
 ```
 
 ## Examples
-You can change the logging method and log level by setting LOG\_FORMAT and LOG\_LEVEL environment variables, the default log level is FATAL.
+You can change the logging method and log level by setting LOG\_FORMAT and LOG\_LEVEL environment variables, the default log level is "fatal".
 ```
-$ go build ./... && LOG_LEVEL=INFO ./kpi-uploader
+$ go build ./... && LOG_LEVEL=info ./kpi-uploader
 INFO[0000] Starting up               @version=1 logger=kpi-uploader
 INFO[0000] Current Week is 2020-07   @version=1 logger=kpi-uploader
 INFO[0000] Setting KPI title         @version=1 cell="Cloud migration data!C7:C7" kpi="Number of servers in D7" kpiNum=4 logger=kpi-uploader
@@ -64,7 +64,7 @@ INFO[0001] Setting last updated date @version=1 cell="Cloud migration data!B7:B7
 WARN[0000] No command to run         @version=1 kpi="Number of applications in legacy" logger=kpi-uploader
 [...]
 
-$ LOG_FORMAT=json LOG_LEVEL=INFO ./kpi-uploader
+$ LOG_FORMAT=json LOG_LEVEL=info ./kpi-uploader
 {"@timestamp":"2020-02-13T17:43:18.009689+01:00","@version":"1","caller":"main.main","file":".../kpi-uploader/main.go:146","level":"info","logger":"kpi-uploader","message":"Starting up"}
 {"@timestamp":"2020-02-13T17:43:18.01076+01:00","@version":"1","caller":"main.updateKPIGoogleSheet","file":".../kpi-uploader/main.go:165","level":"info","logger":"kpi-uploader","message":"Current Week is 2020-07"}
 {"@timestamp":"2020-02-13T17:43:18.646178+01:00","@version":"1","caller":"main.updateKPIGoogleSheet","cell":"Cloud migration data!C7:C7","file":".../kpi-uploader/main.go:251","kpi":"Number of servers in D7","kpiNum":4,"level":"info","logger":"kpi-uploader","message":"Setting KPI title"}
