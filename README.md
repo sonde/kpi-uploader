@@ -20,17 +20,21 @@ sheet-data-date-row: 2         # The row where year-week numbers are
 
 KPI:
   - KPI1:
-    title: "The KPI title for KPI 1" # KPI name
+    title: "Title for KPI 1" # KPI name
     sheet-row: 3                     # The sheet row reserved for this KPI
     kpi-command: "cat"               # The command to run
     kpi-command-args: "var/file.txt" # Arguments to the command
   - KPI2:
+    title: "Number of legacy servers"
+    json-endpoint: "https://prometheus.company.com/query?query=count(up{job=%27prometheus_node_exporter%27})"
+    json-data-picker: "data.result.0.value.1"
+    // Format: {"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1581097668.761,"321"]}]}}
 [...]
 ```
 
 Make sure the `spreadsheet-id` corresponds to a API uploader compatible Google
-spreadsheet, see the provided [example Google KPI spreadsheet](https://docs.google.com/spreadsheets/d/1V5Uu8Wu20S95vJ45gGm_OiRr2QUsLd5PxUhhK3EHBxc/edit#gid=750502480).
-Make sure `sheet-name` corresponds to the sheet name you use to store KPI data.
+spreadsheet, see the provided [example Google KPI spreadsheet](https://docs.google.com/spreadsheets/d/1V5Uu8Wu20S95vJ45gGm_OiRr2QUsLd5PxUhhK3EHBxc/edit#gid=750502480) for Google spreadsheet structure.
+Make sure `sheet-name` corresponds to the sheet name for KPI data in the spreadsheet.
 See `config.yaml-example` for ideas on how to use.
 
 ## Create a G Suite service account
