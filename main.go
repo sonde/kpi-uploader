@@ -206,20 +206,14 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 	lastUpdateDate := time.Now().Format("2006-01-02")
 	logger.Info("Current Week is ", nowYearWeek)
 
-	// Calculates the Column letter for this week
+	// Calculate the Column letter for this week
 	dataWeekColLetter := findThisWeekColumnLetter(cfg, srv, nowYearWeek)
 
-	// Initialize the value setting vessel
+	// Generic value holder
 	var vr sheets.ValueRange
 	vr.Values = make([][]interface{}, 1)
 
-	/* This is where we:
-	 * 1. Re-write all the KPI Titles
-	 * 2. Run the KPI value collecting commands (FIX: move to separate loop)
-	 * 3. Write the KPI data
-	 * 4. Update the last update column
-	 */
-	for i, kpi := range cfg.KPI {
+	for _, kpi := range cfg.KPI {
 
 		ok, out := scrapeEndpoint(&kpi)
 		if !ok {
@@ -227,60 +221,36 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 		}
 
 		// Write KPI title
-		cell := cfg.SheetName + "!" +
-			cfg.SheetKPINameCol + kpi.SheetRow + ":" +
-			cfg.SheetKPINameCol + kpi.SheetRow
-
-		// Write KPI title
-		writeSheetCell(&kpi, cell, out, cfg, srv, &vr)
+		writeSheetCell(&kpi,
+			"Setting KPI title",
+			[]interface{}{kpi.Title},
+			cfg.SheetName+"!"+
+				cfg.SheetKPINameCol+kpi.SheetRow+":"+
+				cfg.SheetKPINameCol+kpi.SheetRow,
+			cfg, srv, &vr)
 
 		// Write KPI value
-		cell = cfg.SheetName + "!" +
-			dataWeekColLetter + kpi.SheetRow + ":" +
-			dataWeekColLetter + kpi.SheetRow
-		logger.WithFields(log.Fields{
-			"kpiNum": i + 1, "cell": cell, "value": out, "week": nowYearWeek,
-		}).Info("Setting KPI value")
-
-		vr.Values[0] = []interface{}{out}
-		_, err := srv.Spreadsheets.Values.Update(cfg.SpreadsheetID,
-			cell, &vr).
-			ValueInputOption("USER_ENTERED").Do()
-		if err != nil {
-			logger.WithFields(log.Fields{
-				"kpi":         kpi.Title,
-				"error":       err,
-				"spreadsheet": cfg.SpreadsheetID,
-				"sheet":       cell,
-				"value":       out,
-			}).Fatal("Writing value to sheet")
-		}
+		writeSheetCell(&kpi,
+			"Setting KPI value",
+			[]interface{}{out},
+			cfg.SheetName+"!"+
+				dataWeekColLetter+kpi.SheetRow+":"+
+				dataWeekColLetter+kpi.SheetRow,
+			cfg, srv, &vr)
 
 		// Update the 'last updated' date
-		cell = cfg.SheetName + "!" +
-			cfg.SheetKPILastUpdateCol + kpi.SheetRow + ":" +
-			cfg.SheetKPILastUpdateCol + kpi.SheetRow
-
-		logger.WithFields(log.Fields{
-			"kpiNum": i + 1, "cell": cell, "value": lastUpdateDate,
-		}).Info("Setting last updated date")
-
-		vr.Values[0] = []interface{}{lastUpdateDate}
-		_, err = srv.Spreadsheets.Values.Update(cfg.SpreadsheetID,
-			cell, &vr).
-			ValueInputOption("USER_ENTERED").Do()
-		if err != nil {
-			logger.WithFields(log.Fields{
-				"kpi":         kpi.Title,
-				"error":       err,
-				"spreadsheet": cfg.SpreadsheetID,
-				"sheet":       cell,
-				"value":       out,
-			}).Fatal("Unable to write data to sheet")
-		}
+		writeSheetCell(&kpi,
+			"Setting last updated date",
+			[]interface{}{lastUpdateDate},
+			cfg.SheetName+"!"+
+				cfg.SheetKPILastUpdateCol+kpi.SheetRow+":"+
+				cfg.SheetKPILastUpdateCol+kpi.SheetRow,
+			cfg, srv, &vr)
 	}
 }
 
+// scrapeEndpoint connects to an HTTP service and retrieves and matches a JSON encoded value
+// or runs and use the return number from an external command
 func scrapeEndpoint(kpi *KPIs) (bool, int) {
 	//log.Printf("Debug[%s]: JSONEndpoint: %s\n", kpi.Title, kpi.JSONEndpoint)
 	var out int
@@ -315,24 +285,24 @@ func scrapeEndpoint(kpi *KPIs) (bool, int) {
 	}
 }
 
-func writeSheetCell(kpi *KPIs, cell string, out int, cfg *Config, srv *sheets.Service, vr *sheets.ValueRange) {
+// writeSheetCell takes a number of parameters and updates a sheet cell with a specified value
+func writeSheetCell(kpi *KPIs, action string, value []interface{}, cell string, cfg *Config, srv *sheets.Service, vr *sheets.ValueRange) {
 
 	logger.WithFields(log.Fields{
 		"cell": cell, "kpi": kpi.Title,
-	}).Info("Setting KPI title")
+	}).Info(action)
 
-	vr.Values[0] = []interface{}{kpi.Title}
+	vr.Values[0] = value
 	_, err := srv.Spreadsheets.Values.Update(cfg.SpreadsheetID,
-		cell, vr).
-		ValueInputOption("RAW").Do()
+		cell, vr).ValueInputOption("USER_ENTERED").Do()
 	if err != nil {
 		logger.WithFields(log.Fields{
 			"kpi":         kpi.Title,
 			"error":       err,
 			"spreadsheet": cfg.SpreadsheetID,
 			"sheet":       cell,
-			"value":       out,
-		}).Fatal("Writing  to sheet")
+			"value":       value,
+		}).Fatal("Writing to sheet")
 	}
 }
 
