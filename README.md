@@ -28,7 +28,7 @@ KPI:
     title: "Number of legacy servers"
     json-endpoint: "https://prometheus.company.com/query?query=count(up{job=%27prometheus_node_exporter%27})"
     json-data-picker: "data.result.0.value.1"
-    // Format: {"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1581097668.761,"321"]}]}}
+    # Format: {"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1581097668.761,"321"]}]}}
 [...]
 ```
 
