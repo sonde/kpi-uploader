@@ -18,6 +18,7 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
+// Global logger object
 var logger log.FieldLogger
 
 // Config struct representing the YAML structure
@@ -121,11 +122,11 @@ func setupLogger() *log.FieldLogger {
 
 	// Logrus has seven logging levels: Trace, Debug, Info, Warning, Error, Fatal and Panic.
 	switch os.Getenv("LOG_LEVEL") { // LOG_LEVEL=warning
-	case "INFO":
+	case "info":
 		log.SetLevel(log.InfoLevel)
-	case "WARN":
+	case "warn":
 		log.SetLevel(log.WarnLevel)
-	case "FATAL":
+	case "fatal":
 		log.SetLevel(log.FatalLevel)
 	default:
 		log.SetLevel(log.FatalLevel)
