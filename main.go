@@ -261,7 +261,7 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 				"spreadsheet": cfg.SpreadsheetID,
 				"sheet":       cell,
 				"value":       out,
-			}).Fatal("Unable to write data to sheet")
+			}).Fatal("Writing  to sheet")
 		}
 
 		// Write KPI value
@@ -283,7 +283,7 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 				"spreadsheet": cfg.SpreadsheetID,
 				"sheet":       cell,
 				"value":       out,
-			}).Fatal("Unable to write data to sheet")
+			}).Fatal("Writing value to sheet")
 		}
 
 		// Update the 'last updated' date
