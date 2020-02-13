@@ -3,12 +3,12 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/takuoki/clmconv"
 	"github.com/tidwall/gjson"
 
@@ -17,6 +17,8 @@ import (
 	sheets "google.golang.org/api/sheets/v4"
 	yaml "gopkg.in/yaml.v2"
 )
+
+var logger log.FieldLogger
 
 // Config struct representing the YAML structure
 type Config struct {
@@ -44,40 +46,112 @@ const (
 // parseConfigYaml, access like: cfg.SpreadsheetID and cfg.KPI[0].Title
 func parseConfigYaml(configYaml string) *Config {
 	f, err := os.Open(configYaml)
-	checkError(err)
+	if err != nil {
+		logger.WithFields(log.Fields{
+			"configFile": configYaml,
+			"error":      err,
+		}).Fatal("Opening YAML file")
+	}
 	defer f.Close()
 
 	var cfg Config
 	decoder := yaml.NewDecoder(f)
-	checkError(decoder.Decode(&cfg))
+	err = decoder.Decode(&cfg)
+	if err != nil {
+		logger.WithFields(log.Fields{
+			"configFile": configYaml,
+			"error":      err,
+		}).Fatal("Decoding YAML file")
+	}
+
 	return &cfg
 }
 
-// checkError just abort if anything fails
-func checkError(err error) {
-	if err != nil {
-		log.Fatalf("%s\n", err.Error())
-	}
-}
-
-func connectToGoogleSheet(clientSecretFile string) (*sheets.Service, error) {
+func connectToGoogleSheet(clientSecretFile string, cfg Config) *sheets.Service {
 	data, err := ioutil.ReadFile(clientSecretFile)
-	checkError(err)
+	if err != nil {
+		logger.WithFields(log.Fields{
+			"secretFile":  clientSecretFile,
+			"error":       err,
+			"spreadsheet": cfg.SpreadsheetID,
+		}).Fatal("Read secret file")
+	}
 	conf, err := google.JWTConfigFromJSON(data, sheets.SpreadsheetsScope)
-	checkError(err)
+	if err != nil {
+		logger.WithFields(log.Fields{
+			"sheetScope":  sheets.SpreadsheetsScope,
+			"error":       err,
+			"spreadsheet": cfg.SpreadsheetID,
+		}).Fatal("Read Google sheet JSON config")
+	}
 
 	client := conf.Client(context.TODO())
 	srv, err := sheets.New(client)
-	return srv, err
+	if err != nil {
+		logger.WithFields(log.Fields{
+			"sheetScope":  sheets.SpreadsheetsScope,
+			"error":       err,
+			"spreadsheet": cfg.SpreadsheetID,
+		}).Fatal("Create sheet object")
+	}
+	return srv
+}
+
+func setupLogger() *log.FieldLogger {
+	if os.Getenv("LOG_FORMAT") == "json" { // Fluentd field name conventions
+
+		log.SetFormatter(&log.JSONFormatter{
+			TimestampFormat: time.RFC3339Nano,
+			FieldMap: log.FieldMap{
+				log.FieldKeyTime:  "@timestamp",
+				log.FieldKeyLevel: "level",
+				log.FieldKeyMsg:   "message",
+				log.FieldKeyFunc:  "caller",
+			},
+		})
+
+		log.SetReportCaller(true)
+
+	} else if os.Getenv("LOG_FORMAT") == "json_plain" { // Logrus field names
+		log.SetFormatter(&log.JSONFormatter{})
+	}
+	if os.Getenv("LOG_STDOUT") == "true" {
+		log.SetOutput(os.Stdout)
+	}
+
+	// Logrus has seven logging levels: Trace, Debug, Info, Warning, Error, Fatal and Panic.
+	switch os.Getenv("LOG_LEVEL") { // LOG_LEVEL=warning
+	case "INFO":
+		log.SetLevel(log.InfoLevel)
+	case "WARN":
+		log.SetLevel(log.WarnLevel)
+	case "FATAL":
+		log.SetLevel(log.FatalLevel)
+	default:
+		log.SetLevel(log.FatalLevel)
+	}
+
+	var logger log.FieldLogger
+	logger = log.WithFields(log.Fields{
+		"@version": "1",
+		"logger":   "kpi-uploader",
+	})
+	return &logger
 }
 
 func main() {
+
+	logger = *setupLogger()
+
+	logger.Info("Starting up")
+
 	cfg := parseConfigYaml(configYaml)
 
-	srv, err := connectToGoogleSheet(clientSecretFile)
-	checkError(err)
+	srv := connectToGoogleSheet(clientSecretFile, *cfg)
 
 	updateKPIGoogleSheet(cfg, srv)
+
+	logger.Info("Shutting down")
 }
 
 // updateKPIGoogleSheet updates the Google Spreadsheet
@@ -88,15 +162,20 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 	year, week := tn.ISOWeek()
 	nowYearWeek := fmt.Sprintf("%d-%02d", year, week)
 	lastUpdateDate := time.Now().Format("2006-01-02")
-	//fmt.Printf("Updating for week: %s\n", nowYearWeek)
+	logger.Info("Current Week is ", nowYearWeek)
 
 	// Find the right week for this run
 	yearWeekRow := cfg.SheetName + "!" + cfg.SheetDataStartCol +
 		cfg.SheetDataDateRow + ":" + cfg.SheetDataDateRow
-	//fmt.Printf("Date row: %v\n", yearWeekRow)
 	resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID,
 		yearWeekRow).Do()
-	checkError(err)
+	if err != nil {
+		logger.WithFields(log.Fields{
+			"cell":        yearWeekRow,
+			"error":       err,
+			"spreadsheet": cfg.SpreadsheetID,
+		}).Fatal("Read data from sheet")
+	}
 
 	dateOffset := -1 // We must find the offset for this weeks column
 	if len(resp.Values) == 0 {
@@ -146,13 +225,19 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 			cmd := exec.Command(kpi.KPICommand, kpi.KPICommandArgs)
 			tmpOut, err := cmd.CombinedOutput()
 			if err != nil {
-				log.Fatalf("cmd.Run() failed with %s\n", err)
+				logger.WithFields(log.Fields{
+					"kpi":     kpi.Title,
+					"error":   err,
+					"command": kpi.KPICommand + " " + kpi.KPICommandArgs,
+				}).Fatal("Running external command")
 			}
-			fmt.Sscanf(string(tmpOut), "%d", &out)
+			fmt.Sscanf(string(tmpOut), "%d", &out) // Catch the result number
 
 		} else {
 
-			log.Printf("Warning: No command to be run for: %s\n", kpi.Title)
+			logger.WithFields(log.Fields{
+				"kpi": kpi.Title,
+			}).Warning("No way to gather data")
 			continue
 
 		}
@@ -161,44 +246,68 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 		cell := cfg.SheetName + "!" +
 			cfg.SheetKPINameCol + kpi.SheetRow + ":" +
 			cfg.SheetKPINameCol + kpi.SheetRow
-		fmt.Printf("KPI %v: Setting cell '%v' to: '%s' (KPI title)\n",
-			i+1, cell, kpi.Title)
+		logger.WithFields(log.Fields{
+			"kpiNum": i + 1, "cell": cell, "kpi": kpi.Title,
+		}).Info("Setting KPI title")
+
 		vr.Values[0] = []interface{}{kpi.Title}
 		_, err = srv.Spreadsheets.Values.Update(cfg.SpreadsheetID,
 			cell, &vr).
 			ValueInputOption("RAW").Do()
 		if err != nil {
-			log.Fatalf("Unable to write data to sheet: %v\n", err)
+			logger.WithFields(log.Fields{
+				"kpi":         kpi.Title,
+				"error":       err,
+				"spreadsheet": cfg.SpreadsheetID,
+				"sheet":       cell,
+				"value":       out,
+			}).Fatal("Unable to write data to sheet")
 		}
 
-		// Write KPI data
+		// Write KPI value
 		cell = cfg.SheetName + "!" +
 			dataWeekColLetter + kpi.SheetRow + ":" +
 			dataWeekColLetter + kpi.SheetRow
-		fmt.Printf("KPI %v: Setting cell '%v' to: %d (KPI value for week %s)\n",
-			i+1, cell, out, nowYearWeek)
+		logger.WithFields(log.Fields{
+			"kpiNum": i + 1, "cell": cell, "value": out, "week": nowYearWeek,
+		}).Info("Setting KPI value")
+
 		vr.Values[0] = []interface{}{out}
 		_, err = srv.Spreadsheets.Values.Update(cfg.SpreadsheetID,
 			cell, &vr).
 			ValueInputOption("USER_ENTERED").Do()
 		if err != nil {
-			log.Fatalf("Unable to write data to sheet: %v\n", err)
+			logger.WithFields(log.Fields{
+				"kpi":         kpi.Title,
+				"error":       err,
+				"spreadsheet": cfg.SpreadsheetID,
+				"sheet":       cell,
+				"value":       out,
+			}).Fatal("Unable to write data to sheet")
 		}
 
 		// Update the 'last updated' date
 		cell = cfg.SheetName + "!" +
 			cfg.SheetKPILastUpdateCol + kpi.SheetRow + ":" +
 			cfg.SheetKPILastUpdateCol + kpi.SheetRow
-		fmt.Printf("KPI %v: Setting cell '%v' to: %s (last update)\n",
-			i+1, cell, lastUpdateDate)
+
+		logger.WithFields(log.Fields{
+			"kpiNum": i + 1, "cell": cell, "value": lastUpdateDate,
+		}).Info("Setting last updated date")
+
 		vr.Values[0] = []interface{}{lastUpdateDate}
 		_, err = srv.Spreadsheets.Values.Update(cfg.SpreadsheetID,
 			cell, &vr).
 			ValueInputOption("USER_ENTERED").Do()
 		if err != nil {
-			log.Fatalf("Unable to write data to sheet: %v\n", err)
+			logger.WithFields(log.Fields{
+				"kpi":         kpi.Title,
+				"error":       err,
+				"spreadsheet": cfg.SpreadsheetID,
+				"sheet":       cell,
+				"value":       out,
+			}).Fatal("Unable to write data to sheet")
 		}
-
 	}
 }
 
@@ -215,7 +324,7 @@ func scrapeToJSON(uri string, dataPicker string) int {
 	// Make request
 	response, err := client.Get(uri)
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal(err)
 	}
 	defer response.Body.Close()
 	//log.Printf("response: %s\n", response.Body)
@@ -225,7 +334,7 @@ func scrapeToJSON(uri string, dataPicker string) int {
 	pageContent := string(dataInBytes)
 
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal(err)
 	}
 
 	value := gjson.Get(pageContent, dataPicker)

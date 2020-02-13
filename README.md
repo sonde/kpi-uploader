@@ -52,16 +52,26 @@ $ go mod tidy
 $ go build ./... && ./kpi-uploader
 ```
 
-## Example
+## Examples
+You can change the logging method and log level by setting LOG\_FORMAT and LOG\_LEVEL environment variables, the default log level is FATAL.
 ```
-$ go build ./... && ./kpi-uploader
-KPI 1: Setting cell 'KPI data!C3:C3' to: 'Number of applications not migrated' (KPI title)
-KPI 1: Setting cell 'KPI data!J3:J3' to: 26 (KPI value for week 2020-06)
-KPI 1: Setting cell 'KPI data!B3:B3' to: 2020-02-05 (last update)
-KPI 2: Setting cell 'KPI data!C4:C4' to: 'Number of servers in old datacenter' (KPI title)
-KPI 2: Setting cell 'KPI data!J4:J4' to: 330 (KPI value for week 2020-06)
-KPI 2: Setting cell 'KPI data!B4:B4' to: 2020-02-05 (last update)
+$ go build ./... && LOG_LEVEL=INFO ./kpi-uploader
+INFO[0000] Starting up               @version=1 logger=kpi-uploader
+INFO[0000] Current Week is 2020-07   @version=1 logger=kpi-uploader
+INFO[0000] Setting KPI title         @version=1 cell="Cloud migration data!C7:C7" kpi="Number of servers in D7" kpiNum=4 logger=kpi-uploader
+INFO[0000] Setting KPI value         @version=1 cell="Cloud migration data!K7:K7" kpiNum=4 logger=kpi-uploader value=321 week=2020-07
+INFO[0001] Setting last updated date @version=1 cell="Cloud migration data!B7:B7" kpiNum=4 logger=kpi-uploader value=2020-02-13
+WARN[0000] No command to run         @version=1 kpi="Number of applications in legacy" logger=kpi-uploader
 [...]
+
+$ LOG_FORMAT=json LOG_LEVEL=INFO ./kpi-uploader
+{"@timestamp":"2020-02-13T17:43:18.009689+01:00","@version":"1","caller":"main.main","file":".../kpi-uploader/main.go:146","level":"info","logger":"kpi-uploader","message":"Starting up"}
+{"@timestamp":"2020-02-13T17:43:18.01076+01:00","@version":"1","caller":"main.updateKPIGoogleSheet","file":".../kpi-uploader/main.go:165","level":"info","logger":"kpi-uploader","message":"Current Week is 2020-07"}
+{"@timestamp":"2020-02-13T17:43:18.646178+01:00","@version":"1","caller":"main.updateKPIGoogleSheet","cell":"Cloud migration data!C7:C7","file":".../kpi-uploader/main.go:251","kpi":"Number of servers in D7","kpiNum":4,"level":"info","logger":"kpi-uploader","message":"Setting KPI title"}
+{"@timestamp":"2020-02-13T17:43:18.953471+01:00","@version":"1","caller":"main.updateKPIGoogleSheet","cell":"Cloud migration data!K7:K7","file":".../kpi-uploader/main.go:273","kpiNum":4,"level":"info","logger":"kpi-uploader","message":"Setting KPI value","value":321,"week":"2020-07"}
+{"@timestamp":"2020-02-13T17:43:19.202086+01:00","@version":"1","caller":"main.updateKPIGoogleSheet","cell":"Cloud migration data!B7:B7","file":".../kpi-uploader/main.go:296","kpiNum":4,"level":"info","logger":"kpi-uploader","message":"Setting last updated date","value":"2020-02-13"}
+{"@timestamp":"2020-02-13T17:43:19.451793+01:00","@version":"1","caller":"main.updateKPIGoogleSheet","file":".../kpi-uploader/main.go:240","kpi":"Number of applications in D7","level":"warning","logger":"kpi-uploader","message":"No command to run"}
+
 ```
 
 The resulting Google spreadsheet data sheet will look similar to this after a week `2020-06` run:
