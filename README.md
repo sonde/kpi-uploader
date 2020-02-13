@@ -10,7 +10,7 @@ file (see below for how to create a Google service account).
 The `config.yaml` config file:
 ```
 # The ID of the Google spreadsheet containing the KPI data logging setup
-spreadsheet-id: "1CYQIbU3KIxxpab2JC0jSUNSIbW0x4SbsRa6AYedA_a3"
+spreadsheet-id: "1V5Uu8Wu20S95vJ45gGm_OiRr2QUsLd5PxUhhK3EHBxc"
 # The name of the sheet that will contain the weekly KPI data
 sheet-name: "KPI data"
 sheet-kpi-last-update-col: "B" # The column where 'Last update' will be logged
