@@ -127,6 +127,8 @@ func setupLogger() *log.FieldLogger {
 	switch os.Getenv("LOG_LEVEL") { // LOG_LEVEL=warning
 	case "info":
 		log.SetLevel(log.InfoLevel)
+	case "debug":
+		log.SetLevel(log.DebugLevel)
 	case "warn":
 		log.SetLevel(log.WarnLevel)
 	case "fatal":
@@ -252,7 +254,7 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 // scrapeEndpoint connects to an HTTP service and retrieves and matches a JSON encoded value
 // or runs and use the return number from an external command
 func scrapeEndpoint(kpi *KPIs) (bool, int) {
-	//log.Printf("Debug[%s]: JSONEndpoint: %s\n", kpi.Title, kpi.JSONEndpoint)
+	logger.Debug("Debug[", kpi.Title, "]: JSONEndpoint: '", kpi.JSONEndpoint, "'")
 	var out int
 	// Run the Web scrape command (if defined)
 	if len(kpi.JSONEndpoint) > 0 {
@@ -322,7 +324,7 @@ func scrapeToJSON(uri string, dataPicker string) int {
 		logger.Fatal(err)
 	}
 	defer response.Body.Close()
-	//log.Printf("response: %s\n", response.Body)
+	logger.Debug("Response body: %s\n", response.Body)
 
 	// Get the response body as a string
 	dataInBytes, err := ioutil.ReadAll(response.Body)
