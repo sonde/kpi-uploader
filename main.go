@@ -125,10 +125,10 @@ func setupLogger() *log.FieldLogger {
 
 	// Logrus has seven logging levels: Trace, Debug, Info, Warning, Error, Fatal and Panic.
 	switch os.Getenv("LOG_LEVEL") { // LOG_LEVEL=warning
-	case "info":
-		log.SetLevel(log.InfoLevel)
 	case "debug":
 		log.SetLevel(log.DebugLevel)
+	case "info":
+		log.SetLevel(log.InfoLevel)
 	case "warn":
 		log.SetLevel(log.WarnLevel)
 	case "fatal":
