@@ -56,7 +56,7 @@ func parseConfigYaml(configYaml string) *Config {
 			"error":      err,
 		}).Fatal("Opening YAML file")
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var cfg Config
 	decoder := yaml.NewDecoder(f)
@@ -143,9 +143,13 @@ func main() {
 
 	cfg := parseConfigYaml(configYaml)
 
+	//go metrics.Serve(":8080", "/_/metrics", "/_/ready", "/_/alive", logger)
+
 	srv := connectToGoogleSheet(clientSecretFile, *cfg)
 
 	updateKPIGoogleSheet(cfg, srv)
+
+	// FIX: Should remember do disconnect from GoogleSheet?
 
 	logger.Info("Shutting down")
 }
@@ -264,7 +268,7 @@ func scrapeEndpoint(kpi *KPIs) (bool, int) {
 				"command": kpi.KPICommand + " " + kpi.KPICommandArgs,
 			}).Fatal("Running external command")
 		}
-		fmt.Sscanf(string(tmpOut), "%d", &out) // Catch the result number
+		_, _ = fmt.Sscanf(string(tmpOut), "%d", &out) // Catch the result number
 		return true, out
 
 	} else {
@@ -313,7 +317,7 @@ func scrapeToJSON(uri string, dataPicker string) int {
 	if err != nil {
 		logger.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	logger.Debug("Response body: %s\n", response.Body)
 
 	// Get the response body as a string
@@ -327,7 +331,7 @@ func scrapeToJSON(uri string, dataPicker string) int {
 	value := gjson.Get(pageContent, dataPicker)
 
 	var out int
-	fmt.Sscanf(value.String(), "%d", &out)
+	_, _ = fmt.Sscanf(value.String(), "%d", &out)
 
 	return out
 }
