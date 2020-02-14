@@ -113,7 +113,6 @@ func setupLogger() *log.FieldLogger {
 				log.FieldKeyFunc:  "caller",
 			},
 		})
-
 		log.SetReportCaller(true)
 
 	} else if os.Getenv("LOG_FORMAT") == "json_plain" { // Logrus field names
@@ -123,19 +122,10 @@ func setupLogger() *log.FieldLogger {
 		log.SetOutput(os.Stdout)
 	}
 
-	// Logrus has seven logging levels: Trace, Debug, Info, Warning, Error, Fatal and Panic.
-	switch os.Getenv("LOG_LEVEL") { // LOG_LEVEL=warning
-	case "debug":
-		log.SetLevel(log.DebugLevel)
-	case "info":
-		log.SetLevel(log.InfoLevel)
-	case "warn":
-		log.SetLevel(log.WarnLevel)
-	case "fatal":
-		log.SetLevel(log.FatalLevel)
-	default:
-		log.SetLevel(log.FatalLevel)
-	}
+	// Logrus has seven log levels:
+	// Trace, Debug, Info, Warning, Error, Fatal and Panic.
+	level, _ := log.ParseLevel(os.Getenv("LOG_LEVEL"))
+	log.SetLevel(level)
 
 	var logger log.FieldLogger
 	logger = log.WithFields(log.Fields{
