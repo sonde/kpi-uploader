@@ -18,8 +18,11 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-// Global logger object
-var logger log.FieldLogger
+const (
+	// Defaults
+	clientSecretFileDefault = "secret.json"
+	configYamlDefault       = "config.yaml"
+)
 
 // Config struct representing the YAML structure
 type Config struct {
@@ -42,16 +45,19 @@ type KPIs struct {
 	JSONDataPicker string `yaml:"json-data-picker"`
 }
 
-const (
-	clientSecretFile = "secret.json"
-	configYaml       = "config.yaml"
-)
+// parseConfigYaml reads CONFIG_FILE or config.yaml,
+// access config ie: cfg.SpreadsheetID and cfg.KPI[0].Title
+func parseConfigYaml(configYamlDefault string) *Config {
 
-// parseConfigYaml, access like: cfg.SpreadsheetID and cfg.KPI[0].Title
-func parseConfigYaml(configYaml string) *Config {
+	// Override the location and name of the config.yaml with CONFIG_FILE
+	configYaml := configYamlDefault
+	if os.Getenv("CONFIG_FILE") != "" {
+		configYaml = os.Getenv("CONFIG_FILE")
+	}
+
 	f, err := os.Open(configYaml)
 	if err != nil {
-		logger.WithFields(log.Fields{
+		logit.WithFields(log.Fields{
 			"configFile": configYaml,
 			"error":      err,
 		}).Fatal("Opening YAML file")
@@ -62,7 +68,7 @@ func parseConfigYaml(configYaml string) *Config {
 	decoder := yaml.NewDecoder(f)
 	err = decoder.Decode(&cfg)
 	if err != nil {
-		logger.WithFields(log.Fields{
+		logit.WithFields(log.Fields{
 			"configFile": configYaml,
 			"error":      err,
 		}).Fatal("Decoding YAML file")
@@ -71,10 +77,17 @@ func parseConfigYaml(configYaml string) *Config {
 	return &cfg
 }
 
-func connectToGoogleSheet(clientSecretFile string, cfg Config) *sheets.Service {
+func connectToGoogleSheet(clientSecretFileDefault string, cfg Config) *sheets.Service {
+
+	// Override the location and name of the secret.json with SECRET_FILE
+	clientSecretFile := clientSecretFileDefault
+	if os.Getenv("SECRET_FILE") != "" {
+		clientSecretFile = os.Getenv("SECRET_FILE")
+	}
+
 	data, err := ioutil.ReadFile(clientSecretFile)
 	if err != nil {
-		logger.WithFields(log.Fields{
+		logit.WithFields(log.Fields{
 			"secretFile":  clientSecretFile,
 			"error":       err,
 			"spreadsheet": cfg.SpreadsheetID,
@@ -82,7 +95,7 @@ func connectToGoogleSheet(clientSecretFile string, cfg Config) *sheets.Service {
 	}
 	conf, err := google.JWTConfigFromJSON(data, sheets.SpreadsheetsScope)
 	if err != nil {
-		logger.WithFields(log.Fields{
+		logit.WithFields(log.Fields{
 			"sheetScope":  sheets.SpreadsheetsScope,
 			"error":       err,
 			"spreadsheet": cfg.SpreadsheetID,
@@ -92,7 +105,7 @@ func connectToGoogleSheet(clientSecretFile string, cfg Config) *sheets.Service {
 	client := conf.Client(context.TODO())
 	srv, err := sheets.New(client)
 	if err != nil {
-		logger.WithFields(log.Fields{
+		logit.WithFields(log.Fields{
 			"sheetScope":  sheets.SpreadsheetsScope,
 			"error":       err,
 			"spreadsheet": cfg.SpreadsheetID,
@@ -101,57 +114,21 @@ func connectToGoogleSheet(clientSecretFile string, cfg Config) *sheets.Service {
 	return srv
 }
 
-func setupLogger() *log.FieldLogger {
-	if os.Getenv("LOG_FORMAT") == "json" { // Fluentd field name conventions
-
-		log.SetFormatter(&log.JSONFormatter{
-			TimestampFormat: time.RFC3339Nano,
-			FieldMap: log.FieldMap{
-				log.FieldKeyTime:  "@timestamp",
-				log.FieldKeyLevel: "level",
-				log.FieldKeyMsg:   "message",
-				log.FieldKeyFunc:  "caller",
-			},
-		})
-		log.SetReportCaller(true)
-
-	} else if os.Getenv("LOG_FORMAT") == "json_plain" { // Logrus field names
-		log.SetFormatter(&log.JSONFormatter{})
-	}
-	if os.Getenv("LOG_STDOUT") == "true" {
-		log.SetOutput(os.Stdout)
-	}
-
-	// Logrus has seven log levels:
-	// Trace, Debug, Info, Warning, Error, Fatal and Panic.
-	level, _ := log.ParseLevel(os.Getenv("LOG_LEVEL"))
-	log.SetLevel(level)
-
-	var logger log.FieldLogger
-	logger = log.WithFields(log.Fields{
-		"@version": "1",
-		"logger":   "kpi-uploader",
-	})
-	return &logger
-}
-
 func main() {
 
-	logger = *setupLogger()
+	logit.Info("Starting up")
 
-	logger.Info("Starting up")
+	cfg := parseConfigYaml(configYamlDefault)
 
-	cfg := parseConfigYaml(configYaml)
+	go Serve(":8080", "/_/metrics", "/_/ready", "/_/alive", logit)
 
-	//go metrics.Serve(":8080", "/_/metrics", "/_/ready", "/_/alive", logger)
-
-	srv := connectToGoogleSheet(clientSecretFile, *cfg)
+	srv := connectToGoogleSheet(clientSecretFileDefault, *cfg)
 
 	updateKPIGoogleSheet(cfg, srv)
 
 	// FIX: Should remember do disconnect from GoogleSheet?
 
-	logger.Info("Shutting down")
+	logit.Info("Shutting down")
 }
 
 // findThisWeekInSheet calculates the Column letter for this week
@@ -161,7 +138,7 @@ func findThisWeekColumnLetter(cfg *Config, srv *sheets.Service, nowYearWeek stri
 	resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID,
 		yearWeekRow).Do()
 	if err != nil {
-		logger.WithFields(log.Fields{
+		logit.WithFields(log.Fields{
 			"cell":        yearWeekRow,
 			"error":       err,
 			"spreadsheet": cfg.SpreadsheetID,
@@ -200,7 +177,7 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 	year, week := tn.ISOWeek()
 	nowYearWeek := fmt.Sprintf("%d-%02d", year, week)
 	lastUpdateDate := time.Now().Format("2006-01-02")
-	logger.Info("Current Week is ", nowYearWeek)
+	logit.Info("Current Week is ", nowYearWeek)
 
 	// Calculate the Column letter for this week
 	dataWeekColLetter := findThisWeekColumnLetter(cfg, srv, nowYearWeek)
@@ -248,7 +225,7 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 // scrapeEndpoint connects to an HTTP service and retrieves and matches a JSON encoded value
 // or runs and use the return number from an external command
 func scrapeEndpoint(kpi *KPIs) (bool, int) {
-	logger.Debug("Debug[", kpi.Title, "]: JSONEndpoint: '", kpi.JSONEndpoint, "'")
+	logit.Debug("Debug[", kpi.Title, "]: JSONEndpoint: '", kpi.JSONEndpoint, "'")
 	var out int
 	// Run the Web scrape command (if defined)
 	if len(kpi.JSONEndpoint) > 0 {
@@ -262,7 +239,7 @@ func scrapeEndpoint(kpi *KPIs) (bool, int) {
 		cmd := exec.Command(kpi.KPICommand, kpi.KPICommandArgs)
 		tmpOut, err := cmd.CombinedOutput()
 		if err != nil {
-			logger.WithFields(log.Fields{
+			logit.WithFields(log.Fields{
 				"kpi":     kpi.Title,
 				"error":   err,
 				"command": kpi.KPICommand + " " + kpi.KPICommandArgs,
@@ -273,7 +250,7 @@ func scrapeEndpoint(kpi *KPIs) (bool, int) {
 
 	} else {
 
-		logger.WithFields(log.Fields{
+		logit.WithFields(log.Fields{
 			"kpi": kpi.Title,
 		}).Warning("No way to gather data")
 		return false, -1
@@ -284,7 +261,7 @@ func scrapeEndpoint(kpi *KPIs) (bool, int) {
 // writeSheetCell takes a number of parameters and updates a sheet cell with a specified value
 func writeSheetCell(kpi *KPIs, action string, value []interface{}, cell string, cfg *Config, srv *sheets.Service, vr *sheets.ValueRange) {
 
-	logger.WithFields(log.Fields{
+	logit.WithFields(log.Fields{
 		"cell": cell, "kpi": kpi.Title,
 	}).Info(action)
 
@@ -292,7 +269,7 @@ func writeSheetCell(kpi *KPIs, action string, value []interface{}, cell string, 
 	_, err := srv.Spreadsheets.Values.Update(cfg.SpreadsheetID,
 		cell, vr).ValueInputOption("USER_ENTERED").Do()
 	if err != nil {
-		logger.WithFields(log.Fields{
+		logit.WithFields(log.Fields{
 			"kpi":         kpi.Title,
 			"error":       err,
 			"spreadsheet": cfg.SpreadsheetID,
@@ -315,17 +292,17 @@ func scrapeToJSON(uri string, dataPicker string) int {
 	// Make request
 	response, err := client.Get(uri)
 	if err != nil {
-		logger.Fatal(err)
+		logit.Fatal(err)
 	}
 	defer func() { _ = response.Body.Close() }()
-	logger.Debug("Response body: %s\n", response.Body)
+	logit.Debug("Response body: %s\n", response.Body)
 
 	// Get the response body as a string
 	dataInBytes, err := ioutil.ReadAll(response.Body)
 	pageContent := string(dataInBytes)
 
 	if err != nil {
-		logger.Fatal(err)
+		logit.Fatal(err)
 	}
 
 	value := gjson.Get(pageContent, dataPicker)
