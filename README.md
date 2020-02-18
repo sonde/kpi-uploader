@@ -88,7 +88,6 @@ Next week, when run, `kpi-uploader` will add numbers to the `2020-07`
 column for the specified KPIs.
 
 ## Improvements
-This is a crude implementation, possible enhancements could include:
-1. Built in support for querying and parsing of Prometheus metrics etc
-2. Support for only uplading oen KPI at a time
-3. Abort the update if the KPI title has conflicting content
+Possible enhancements could include:
+1. Support for only uplading one KPI at a time
+2. Abort the update if the KPI title has conflicting content
