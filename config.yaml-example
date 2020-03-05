@@ -1,3 +1,6 @@
+# Use CONFIG_FILE to override file name and location for this config file
+# Use SECRET_FILE to override file name and location for the Google service user secret file
+
 # The ID of the Google spreadsheet containing the KPI data logging setup
 spreadsheet-id: "1V5Uu8Wu20S95vJ45gGm_OiRr2QUsLd5PxUhhK3EHBxc"
 # The name of the sheet that will contain the weekly KPI data
@@ -6,6 +9,11 @@ sheet-kpi-last-update-col: "B" # The column where 'Last update' will be logged
 sheet-kpi-name-col: "C"        # The column where 'KPI title' will be logged
 sheet-data-start-col: "E"      # The column for the first week of data
 sheet-data-date-row: 2         # The row where year-week numbers are
+
+ckecks-port: ":8080"              # ":<port number>"
+checks-path-metrics: "/_/metrics" # Path to where metrics are available
+checks-path-ready: "/_/ready"     # Path to where ready status is available
+checks-path-live: "/_/alive"      # Path to where liveness information is available
 
 KPI:
   - KPI1:

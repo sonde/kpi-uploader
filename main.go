@@ -32,6 +32,10 @@ type Config struct {
 	SheetKPINameCol       string `yaml:"sheet-kpi-name-col"`
 	SheetDataStartCol     string `yaml:"sheet-data-start-col"`
 	SheetDataDateRow      string `yaml:"sheet-data-date-row"`
+	CkecksPort            string `yaml:"ckecks-port"`
+	ChecksPathMetrics     string `yaml:"checks-path-metrics"`
+	ChecksPathReady       string `yaml:"checks-path-ready"`
+	ChecksPathLive        string `yaml:"checks-path-live"`
 	KPI                   []KPIs `yaml:"KPI"`
 }
 
@@ -120,7 +124,9 @@ func main() {
 
 	cfg := parseConfigYaml(configYamlDefault)
 
-	go Serve(":8080", "/_/metrics", "/_/ready", "/_/alive", logit)
+	//go Serve(":8080", "/_/metrics", "/_/ready", "/_/alive", logit)
+	go Serve(cfg.CkecksPort, cfg.ChecksPathMetrics, cfg.ChecksPathReady,
+		cfg.ChecksPathLive, logit)
 
 	srv := connectToGoogleSheet(clientSecretFileDefault, *cfg)
 
