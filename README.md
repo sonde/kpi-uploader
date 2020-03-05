@@ -18,6 +18,11 @@ sheet-kpi-name-col: "C"        # The column where 'KPI title' will be logged
 sheet-data-start-col: "E"      # The column for the first week of data
 sheet-data-date-row: 2         # The row where year-week numbers are
 
+ckecks-port: ":8080"              # ":<port number>"
+checks-path-metrics: "/_/metrics" # Path to where metrics are available
+checks-path-ready: "/_/ready"     # Path to where ready status is available
+checks-path-live: "/_/alive"      # Path to where liveness information is available
+
 KPI:
   - KPI1:
     title: "Title for KPI 1" # KPI name
