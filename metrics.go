@@ -14,10 +14,21 @@ const (
 	namespace = "syncer"
 )
 
-var logit = logger.Log
+var (
+	syncStatusSynced    = "synced"
+	syncStatusCollision = "collision"
+	syncStatusFailed    = "failed"
+)
 
 var (
-	// SyncRunDurationSeconds blah
+	errorCode = map[string]int{
+		syncStatusSynced:    1,
+		syncStatusCollision: 2,
+		syncStatusFailed:    3,
+	}
+	logit = logger.Log
+
+	// SyncRunDurationSeconds times the execution time of the update cycle
 	SyncRunDurationSeconds = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name:      "sync_run_duration_seconds",
 		Namespace: namespace,
@@ -35,9 +46,9 @@ var (
 	// DataUploadedToSheet counts all Google sheet updates and writes
 	DataUploadedToSheet = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name:      "synced_kubernetes_secrets_total",
+			Name:      "synced_datapoints_total",
 			Namespace: namespace,
-			Help:      "total count of secrets synced to kubernetes",
+			Help:      "total count of datapoints to the Google spreadsheet",
 		},
 		[]string{"status"},
 	)

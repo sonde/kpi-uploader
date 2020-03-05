@@ -147,7 +147,10 @@ func findThisWeekColumnLetter(cfg *Config, srv *sheets.Service, nowYearWeek stri
 
 	dateOffset := -1 // We must find the offset for this weeks column
 	if len(resp.Values) == 0 {
-		fmt.Println("No YYYY-WW dates found.")
+		logit.WithFields(log.Fields{
+			"cell":        yearWeekRow,
+			"spreadsheet": cfg.SpreadsheetID,
+		}).Fatal("No YYYY-WW dates found in sheet")
 	} else {
 		for colCounter, row := range resp.Values[0] {
 			//fmt.Printf(">> %v, %v\n", colCounter, row)
@@ -159,8 +162,10 @@ func findThisWeekColumnLetter(cfg *Config, srv *sheets.Service, nowYearWeek stri
 		}
 	}
 	if dateOffset == -1 {
-		fmt.Printf("Could not find week %s\n", nowYearWeek)
-		fmt.Printf("FIX: Add a new week column when a week is missing\n")
+		logit.WithFields(log.Fields{
+			"cell":        yearWeekRow,
+			"spreadsheet": cfg.SpreadsheetID,
+		}).Debug("FIX: Add a new week column when a week is missing")
 		os.Exit(1)
 	}
 
@@ -182,6 +187,14 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 	// Calculate the Column letter for this week
 	dataWeekColLetter := findThisWeekColumnLetter(cfg, srv, nowYearWeek)
 
+	// Variables for each state for gauge metrics
+	//var valuesSynced, valuesCollision, valuesFailed int
+	syncCount := map[int]int{
+		errorCode["synced"]:    0,
+		errorCode["collision"]: 0,
+		errorCode["failed"]:    0,
+	}
+
 	// Generic value holder
 	var vr sheets.ValueRange
 	vr.Values = make([][]interface{}, 1)
@@ -194,32 +207,41 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 		}
 
 		// Write KPI title
-		writeSheetCell(&kpi,
+		// We should not overwrite a KPI title, only set it if
+		// it is unset, we should also break off the update if
+		// the KPI title is not matching.
+		syncCount[writeSheetCell(&kpi,
 			"Setting KPI title",
 			[]interface{}{kpi.Title},
 			cfg.SheetName+"!"+
 				cfg.SheetKPINameCol+kpi.SheetRow+":"+
 				cfg.SheetKPINameCol+kpi.SheetRow,
-			cfg, srv, &vr)
+			cfg, srv, &vr, 0)]++
 
 		// Write KPI value
-		writeSheetCell(&kpi,
+		syncCount[writeSheetCell(&kpi,
 			"Setting KPI value",
 			[]interface{}{out},
 			cfg.SheetName+"!"+
 				dataWeekColLetter+kpi.SheetRow+":"+
 				dataWeekColLetter+kpi.SheetRow,
-			cfg, srv, &vr)
+			cfg, srv, &vr, 1)]++
 
 		// Update the 'last updated' date
-		writeSheetCell(&kpi,
+		syncCount[writeSheetCell(&kpi,
 			"Setting last updated date",
 			[]interface{}{lastUpdateDate},
 			cfg.SheetName+"!"+
 				cfg.SheetKPILastUpdateCol+kpi.SheetRow+":"+
 				cfg.SheetKPILastUpdateCol+kpi.SheetRow,
-			cfg, srv, &vr)
+			cfg, srv, &vr, 1)]++
 	}
+
+	// Set all the gauge metrics at the end to provide a consistent step
+	//DataUploadedToSheet.WithLabelValues(syncStatusSynced).Set(float64(syncCount[errorCode["synced"]]))
+	//DataUploadedToSheet.WithLabelValues(syncStatusFailed).Set(float64(syncCount[errorCode["failed"]]))
+	//DataUploadedToSheet.WithLabelValues(syncStatusCollision).Set(float64(syncCount[errorCode["collision"]]))
+
 }
 
 // scrapeEndpoint connects to an HTTP service and retrieves and matches a JSON encoded value
@@ -259,8 +281,39 @@ func scrapeEndpoint(kpi *KPIs) (bool, int) {
 }
 
 // writeSheetCell takes a number of parameters and updates a sheet cell with a specified value
-func writeSheetCell(kpi *KPIs, action string, value []interface{}, cell string, cfg *Config, srv *sheets.Service, vr *sheets.ValueRange) {
+func writeSheetCell(kpi *KPIs, action string, value []interface{},
+	cell string, cfg *Config, srv *sheets.Service,
+	vr *sheets.ValueRange, overwrite int) int {
 
+	fmt.Printf("Debug 1: %v = %v\n", action, value[0])
+
+	// Check if existing vakue is an empty value or if it is the
+	// same value as we want to set.
+	if overwrite == 0 {
+		resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID,
+			cell).Do()
+		if err != nil {
+			logit.WithFields(log.Fields{
+				"cell":        cell,
+				"error":       err,
+				"spreadsheet": cfg.SpreadsheetID,
+			}).Fatal("Read cell data from sheet")
+		}
+
+		// A value exists but is not the same as we got.
+		if len(resp.Values) > 0 && resp.Values[0][0] != value[0] {
+			logit.WithFields(log.Fields{
+				"cell":        cell,
+				"error":       err,
+				"spreadsheet": cfg.SpreadsheetID,
+				"cellValue":   resp.Values[0][0],
+				"newValue":    value[0],
+			}).Warning("Skip ", action)
+
+			// fmt.Printf("Skip %s as %v != %v\n", action, resp.Values[0][0], value[0])
+			return errorCode["collision"]
+		}
+	}
 	logit.WithFields(log.Fields{
 		"cell": cell, "kpi": kpi.Title,
 	}).Info(action)
@@ -276,7 +329,9 @@ func writeSheetCell(kpi *KPIs, action string, value []interface{}, cell string, 
 			"sheet":       cell,
 			"value":       value,
 		}).Fatal("Writing to sheet")
+		return errorCode["synced"]
 	}
+	return errorCode["failed"]
 }
 
 func scrapeToJSON(uri string, dataPicker string) int {
