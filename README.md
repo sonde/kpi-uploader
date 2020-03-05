@@ -13,8 +13,8 @@ The `config.yaml` config file:
 spreadsheet-id: "1V5Uu8Wu20S95vJ45gGm_OiRr2QUsLd5PxUhhK3EHBxc"
 # The name of the sheet that will contain the weekly KPI data
 sheet-name: "KPI data"
-sheet-kpi-last-update-col: "B" # The column where 'Last update' will be logged
-sheet-kpi-name-col: "C"        # The column where 'KPI title' will be logged
+sheet-row-last-update-col: "B" # The column where 'Last update' will be logged
+sheet-key-col: "C"             # The column where title will be logged
 sheet-data-start-col: "E"      # The column for the first week of data
 sheet-data-date-row: 2         # The row where year-week numbers are
 

@@ -28,8 +28,8 @@ const (
 type Config struct {
 	SpreadsheetID         string `yaml:"spreadsheet-id"`
 	SheetName             string `yaml:"sheet-name"`
-	SheetKPILastUpdateCol string `yaml:"sheet-kpi-last-update-col"`
-	SheetKPINameCol       string `yaml:"sheet-kpi-name-col"`
+	SheetRowLastUpdateCol string `yaml:"sheet-row-last-update-col"`
+	SheetKeyCol           string `yaml:"sheet-key-col"`
 	SheetDataStartCol     string `yaml:"sheet-data-start-col"`
 	SheetDataDateRow      string `yaml:"sheet-data-date-row"`
 	CkecksPort            string `yaml:"ckecks-port"`
@@ -220,8 +220,8 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 			"Setting KPI title",
 			[]interface{}{kpi.Title},
 			cfg.SheetName+"!"+
-				cfg.SheetKPINameCol+kpi.SheetRow+":"+
-				cfg.SheetKPINameCol+kpi.SheetRow,
+				cfg.SheetKeyCol+kpi.SheetRow+":"+
+				cfg.SheetKeyCol+kpi.SheetRow,
 			cfg, srv, &vr, 0)]++
 
 		// Write KPI value
@@ -238,8 +238,8 @@ func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
 			"Setting last updated date",
 			[]interface{}{lastUpdateDate},
 			cfg.SheetName+"!"+
-				cfg.SheetKPILastUpdateCol+kpi.SheetRow+":"+
-				cfg.SheetKPILastUpdateCol+kpi.SheetRow,
+				cfg.SheetRowLastUpdateCol+kpi.SheetRow+":"+
+				cfg.SheetRowLastUpdateCol+kpi.SheetRow,
 			cfg, srv, &vr, 1)]++
 	}
 
