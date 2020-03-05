@@ -291,8 +291,6 @@ func writeSheetCell(kpi *KPIs, action string, value []interface{},
 	cell string, cfg *Config, srv *sheets.Service,
 	vr *sheets.ValueRange, overwrite int) int {
 
-	fmt.Printf("Debug 1: %v = %v\n", action, value[0])
-
 	// Check if existing vakue is an empty value or if it is the
 	// same value as we want to set.
 	if overwrite == 0 {
