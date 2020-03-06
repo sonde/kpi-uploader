@@ -30,13 +30,15 @@ type Config struct {
 	SheetName             string `yaml:"sheet-name"`
 	SheetRowLastUpdateCol string `yaml:"sheet-row-last-update-col"`
 	SheetKeyCol           string `yaml:"sheet-key-col"`
+	SheetTopicRow         string `yaml:"sheet-topic-row"`
 	SheetDataStartCol     string `yaml:"sheet-data-start-col"`
-	SheetDataDateRow      string `yaml:"sheet-data-date-row"`
 	CkecksPort            string `yaml:"ckecks-port"`
 	ChecksPathMetrics     string `yaml:"checks-path-metrics"`
 	ChecksPathReady       string `yaml:"checks-path-ready"`
 	ChecksPathLive        string `yaml:"checks-path-live"`
-	KPI                   []KPIs `yaml:"KPI"`
+
+	Datapoints []Datapoint `yaml:"datapoints"`
+	KPI        []KPIs      `yaml:"KPI"`
 }
 
 // The KPIs struct holds the array of KPIs
@@ -47,6 +49,14 @@ type KPIs struct {
 	KPICommandArgs string `yaml:"kpi-command-args"`
 	JSONEndpoint   string `yaml:"json-endpoint"`
 	JSONDataPicker string `yaml:"json-data-picker"`
+}
+
+// The Datapoint struct holds the array of KPIs
+type Datapoint struct {
+	Title    string `yaml:"title"`
+	SheetCol string `yaml:"sheet-col"`
+	Command  string `yaml:"command"`
+	Args     string `yaml:"args"`
 }
 
 // parseConfigYaml reads CONFIG_FILE or config.yaml,
@@ -130,17 +140,23 @@ func main() {
 
 	srv := connectToGoogleSheet(clientSecretFileDefault, *cfg)
 
-	updateKPIGoogleSheet(cfg, srv)
+	if cfg.KPI != nil {
+		logit.Debug("Taking the KPI branch!")
+		updateGoogleSheetKPI(cfg, srv)
+	} else {
+		logit.Debug("Taking the other branch!")
+		updateGoogleSheetValues(cfg, srv)
+	}
 
 	// FIX: Should remember do disconnect from GoogleSheet?
 
 	logit.Info("Shutting down")
 }
 
-// findThisWeekInSheet calculates the Column letter for this week
-func findThisWeekColumnLetter(cfg *Config, srv *sheets.Service, nowYearWeek string) string {
+// sheetCellValueToSheetLetter calculates the Column letter for a cell value
+func sheetCellValueToSheetLetter(cfg *Config, srv *sheets.Service, nowYearWeek string) string {
 	yearWeekRow := cfg.SheetName + "!" + cfg.SheetDataStartCol +
-		cfg.SheetDataDateRow + ":" + cfg.SheetDataDateRow
+		cfg.SheetTopicRow + ":" + cfg.SheetTopicRow
 	resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID,
 		yearWeekRow).Do()
 	if err != nil {
@@ -180,8 +196,72 @@ func findThisWeekColumnLetter(cfg *Config, srv *sheets.Service, nowYearWeek stri
 	return clmconv.Itoa(dataStartColNum + dateOffset)
 }
 
-// updateKPIGoogleSheet updates the Google Spreadsheet
-func updateKPIGoogleSheet(cfg *Config, srv *sheets.Service) {
+// findThisWeekInSheet calculates the Column letter for this week
+func findThisWeekColumnLetter(cfg *Config, srv *sheets.Service, nowYearWeek string) string {
+	yearWeekRow := cfg.SheetName + "!" + cfg.SheetDataStartCol +
+		cfg.SheetTopicRow + ":" + cfg.SheetTopicRow
+	resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID,
+		yearWeekRow).Do()
+	if err != nil {
+		logit.WithFields(log.Fields{
+			"cell":        yearWeekRow,
+			"error":       err,
+			"spreadsheet": cfg.SpreadsheetID,
+		}).Fatal("Read data from sheet")
+	}
+
+	dateOffset := -1 // We must find the offset for this weeks column
+	if len(resp.Values) == 0 {
+		logit.WithFields(log.Fields{
+			"cell":        yearWeekRow,
+			"spreadsheet": cfg.SpreadsheetID,
+		}).Fatal("No YYYY-WW dates found in sheet")
+	} else {
+		for colCounter, row := range resp.Values[0] {
+			//fmt.Printf(">> %v, %v\n", colCounter, row)
+			if nowYearWeek == row {
+				dateOffset = colCounter
+				//fmt.Printf(">>>> %s == %s\n", nowYearWeek, row)
+				break
+			}
+		}
+	}
+	if dateOffset == -1 {
+		logit.WithFields(log.Fields{
+			"cell":        yearWeekRow,
+			"spreadsheet": cfg.SpreadsheetID,
+		}).Debug("FIX: Add a new week column when a week is missing")
+		os.Exit(1)
+	}
+
+	// Calculate the column letter (cfg.SheetDataStartCol + dateOffset)
+	dataStartColNum, err := clmconv.Atoi(cfg.SheetDataStartCol)
+	return clmconv.Itoa(dataStartColNum + dateOffset)
+}
+
+// updateGoogleSheetValues updates the Google Spreadsheet
+func updateGoogleSheetValues(cfg *Config, srv *sheets.Service) {
+
+	lastUpdateDate := time.Now().Format("2006-01-02")
+	logit.Info("Current date is ", lastUpdateDate)
+
+	// Generic value holder
+	var vr sheets.ValueRange
+	vr.Values = make([][]interface{}, 1)
+
+	// for _, dp := range cfg.Datapoints {
+
+	// logit.Debug("Title: ", dp.Title, "col: ", dp.SheetCol, " command: ", dp.Command, " ", dp.Args)
+
+	// Let us find out if the topic we are to update
+	// exists on row sheet-topic-row
+
+	//}
+	// HERE!
+}
+
+// updateGoogleSheetKPI updates the Google Spreadsheet
+func updateGoogleSheetKPI(cfg *Config, srv *sheets.Service) {
 
 	// Construct the string matching this week ("YYYY-WW")
 	tn := time.Now().UTC()

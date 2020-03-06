@@ -13,10 +13,10 @@ The `config.yaml` config file:
 spreadsheet-id: "1V5Uu8Wu20S95vJ45gGm_OiRr2QUsLd5PxUhhK3EHBxc"
 # The name of the sheet that will contain the weekly KPI data
 sheet-name: "KPI data"
-sheet-key-col: "C"             # The column where title will be logged
+sheet-key-col: "C"             # The column where title will be logged / found
 sheet-row-last-update-col: "B" # The column where 'Last update' will be logged
 sheet-data-start-col: "E"      # The column for the first week of data
-sheet-data-date-row: 2         # The row where year-week numbers are
+sheet-topic-row: 2             # The row where topic or <year-week> is found
 
 ckecks-port: ":8080"              # ":<port number>"
 checks-path-metrics: "/_/metrics" # Path to where metrics are available
