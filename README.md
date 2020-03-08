@@ -14,9 +14,10 @@ spreadsheet-id: "1V5Uu8Wu20S95vJ45gGm_OiRr2QUsLd5PxUhhK3EHBxc"
 # The name of the sheet that will contain the weekly KPI data
 sheet-name: "KPI data"
 sheet-key-col: "C"             # The column where title will be logged / found
-sheet-row-last-update-col: "B" # The column where 'Last update' will be logged
-sheet-data-start-col: "E"      # The column for the first week of data
 sheet-topic-row: 2             # The row where topic or <year-week> is found
+sheet-data-start-col: "E"      # The column for the first week of data
+sheet-data-start-row: 4        # The row where data begin to appear
+sheet-last-update-col: "B"     # The column where 'Last update' will be logged
 
 ckecks-port: ":8080"              # ":<port number>"
 checks-path-metrics: "/_/metrics" # Path to where metrics are available
@@ -96,3 +97,10 @@ column for the specified KPIs.
 Possible enhancements could include:
 1. Support for only uplading one KPI at a time
 2. Abort the update if the KPI title has conflicting content
+
+# FAQ
+
+1. How to overcome rateLimitExceeded:
+   You can petition for increasing the 100 requests pr 100 sec quota for Google Sheets API:
+   https://console.cloud.google.com/iam-admin/quotas?project=<your-project-name>&organizationId=<your-org-id>
+
