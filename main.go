@@ -171,7 +171,7 @@ func sheetCellValueToSheetLetter(cfg *Config, srv *sheets.Service,
 			"cell":        rowToSearch,
 			"error":       err,
 			"spreadsheet": cfg.SpreadsheetID,
-		}).Fatal("Read data from sheet")
+		}).Fatal("Read col data from sheet")
 	}
 
 	// Calculate the column letter (cfg.SheetDataStartCol + offset)
@@ -189,8 +189,10 @@ func sheetCellValueToSheetLetter(cfg *Config, srv *sheets.Service,
 
 			if cache {
 				if _, ok := topicCache[fmt.Sprintf("%v", row)]; !ok {
-					topicCache[fmt.Sprintf("%v", row)] = clmconv.Itoa(dataStartColNum + colCounter)
-					fmt.Printf("topicCache[%s] = %s\n", fmt.Sprintf("%v", row), clmconv.Itoa(dataStartColNum+colCounter))
+					if row != "" {
+						topicCache[fmt.Sprintf("%v", row)] = clmconv.Itoa(dataStartColNum + colCounter)
+						fmt.Printf("topicCache[%s] = %s\n", fmt.Sprintf("%v", row), clmconv.Itoa(dataStartColNum+colCounter))
+					}
 				}
 			}
 			if searchFor == row && offset == -1 {
@@ -228,7 +230,7 @@ func sheetCellValueToSheetRow(cfg *Config, srv *sheets.Service,
 			"cell":        colToSearch,
 			"error":       err,
 			"spreadsheet": cfg.SpreadsheetID,
-		}).Fatal("Read data from sheet")
+		}).Fatal("Read row data from sheet")
 	}
 
 	logit.Debug(" -- colToSearch: ", colToSearch)
@@ -317,9 +319,9 @@ func updateGoogleSheetValues(cfg *Config, srv *sheets.Service) {
 
 				// Update sheet
 				if theKey, ok := keyCache[key]; ok {
-					fmt.Printf("key: %s at pos: %s%d => %s\n", key,
+					fmt.Printf("key: %s at pos: %s%d for %s => %s\n", key,
 						topicCache[dp.Title], theKey,
-						val)
+						dp.Title, val)
 
 					// Prepare cell address and value
 					cell := cfg.SheetName + "!" + topicCache[dp.Title] + fmt.Sprintf("%d", theKey)
