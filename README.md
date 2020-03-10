@@ -24,6 +24,17 @@ checks-path-metrics: "/_/metrics" # Path to where metrics are available
 checks-path-ready: "/_/ready"     # Path to where ready status is available
 checks-path-live: "/_/alive"      # Path to where liveness information is available
 
+datapoints:
+  - point1:
+    title: "maxReplica"
+    command: "./bin/list_prod_deployment_replicas"
+    args: ""
+
+  - point2:
+    title: "Requested CPU"
+    command: "./bin/list_prod_deployment_cpu_request"
+    args: ""
+
 KPI:
   - KPI1:
     title: "Title for KPI 1" # KPI name
@@ -101,6 +112,7 @@ Possible enhancements could include:
 # FAQ
 
 1. How to overcome rateLimitExceeded:
+   `rateLimitExceeded` is handeled by sleeping for 10 sec until a new 1000 sec period opens up.
    You can petition for increasing the 100 requests pr 100 sec quota for Google Sheets API:
    https://console.cloud.google.com/iam-admin/quotas?project=<your-project-name>&organizationId=<your-org-id>
 
