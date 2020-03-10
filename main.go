@@ -139,21 +139,19 @@ func main() {
 
 	cfg := parseConfigYaml(configYamlDefault)
 
-	//go Serve(":8080", "/_/metrics", "/_/ready", "/_/alive", logit)
+	// go Serve(":8080", "/_/metrics", "/_/ready", "/_/alive", logit)
 	go Serve(cfg.CkecksPort, cfg.ChecksPathMetrics, cfg.ChecksPathReady,
 		cfg.ChecksPathLive, logit)
 
 	srv := connectToGoogleSheet(clientSecretFileDefault, *cfg)
 
 	if cfg.KPI != nil {
-		logit.Debug("Taking the KPI branch!")
+		logit.Debug("Taking the KPI branch!") // Legacy
 		updateGoogleSheetKPI(cfg, srv)
 	} else {
-		logit.Debug("Taking the other branch!")
+		logit.Debug("Taking the datapoints branch!")
 		updateGoogleSheetValues(cfg, srv)
 	}
-
-	// FIX: Should remember do disconnect from GoogleSheet?
 
 	logit.Info("Shutting down")
 }
@@ -185,13 +183,15 @@ func sheetCellValueToSheetLetter(cfg *Config, srv *sheets.Service,
 		}).Fatal("Topic not found in sheet")
 	} else {
 		for colCounter, row := range resp.Values[0] {
-			// fmt.Printf(">> %v, %v\n", colCounter, row)
 
 			if cache {
 				if _, ok := topicCache[fmt.Sprintf("%v", row)]; !ok {
 					if row != "" {
 						topicCache[fmt.Sprintf("%v", row)] = clmconv.Itoa(dataStartColNum + colCounter)
-						fmt.Printf("topicCache[%s] = %s\n", fmt.Sprintf("%v", row), clmconv.Itoa(dataStartColNum+colCounter))
+						logit.WithFields(log.Fields{
+							"topic": row,
+							"val":   clmconv.Itoa(dataStartColNum + colCounter),
+						}).Debug("Caching topic")
 					}
 				}
 			}
@@ -207,8 +207,7 @@ func sheetCellValueToSheetLetter(cfg *Config, srv *sheets.Service,
 		logit.WithFields(log.Fields{
 			"cell":        rowToSearch,
 			"spreadsheet": cfg.SpreadsheetID,
-		}).Debug("FIX: Add a new column for topic")
-		os.Exit(1)
+		}).Fatal("FIX: Add a new column for topic")
 	}
 
 	return clmconv.Itoa(dataStartColNum + offset)
@@ -233,7 +232,7 @@ func sheetCellValueToSheetRow(cfg *Config, srv *sheets.Service,
 		}).Fatal("Read row data from sheet")
 	}
 
-	logit.Debug(" -- colToSearch: ", colToSearch)
+	logit.Debug("colToSearch: ", colToSearch)
 
 	offset := -1 // The offset for this row
 	if len(resp.Values) == 0 {
@@ -244,18 +243,19 @@ func sheetCellValueToSheetRow(cfg *Config, srv *sheets.Service,
 	} else {
 
 		for colCounter, col := range resp.Values {
-			// fmt.Printf(">> %v, %v\n", colCounter, col[0])
 
 			if cache && len(col) > 0 {
 				if _, ok := keyCache[fmt.Sprintf("%v", col[0])]; !ok {
 					keyCache[fmt.Sprintf("%v", col[0])] = sheetDataStartRow + colCounter
-					fmt.Printf("keyCache[%v] = %d\n", col[0], sheetDataStartRow+colCounter)
+					logit.WithFields(log.Fields{
+						"key": col[0],
+						"val": sheetDataStartRow + colCounter,
+					}).Debug("Caching key")
 				}
 			}
 
 			if len(col) > 0 && searchFor == col[0] && offset == -1 {
 				offset = colCounter
-				fmt.Printf(">>>> %s == %s\n", searchFor, col[0])
 				if !cache {
 					break // Break quickly if not a caching run
 				}
@@ -266,8 +266,7 @@ func sheetCellValueToSheetRow(cfg *Config, srv *sheets.Service,
 		logit.WithFields(log.Fields{
 			"cell":        colToSearch,
 			"spreadsheet": cfg.SpreadsheetID,
-		}).Debug("FIX: Add a new column for key")
-		os.Exit(1)
+		}).Fatal("FIX: Add a new column for key")
 	}
 
 	return sheetDataStartRow + offset
@@ -276,8 +275,7 @@ func sheetCellValueToSheetRow(cfg *Config, srv *sheets.Service,
 // updateGoogleSheetValues updates the Google Spreadsheet
 func updateGoogleSheetValues(cfg *Config, srv *sheets.Service) {
 
-	lastUpdateDate := time.Now().Format("2006-01-02")
-	logit.Info("Current date is ", lastUpdateDate)
+	// lastUpdateDate := time.Now().Format("2006-01-02")
 
 	// Generic value holder
 	var vr sheets.ValueRange
@@ -292,7 +290,12 @@ func updateGoogleSheetValues(cfg *Config, srv *sheets.Service) {
 		_ = sheetCellValueToSheetLetter(cfg, srv, dp.Title, true)
 		_ = sheetCellValueToSheetRow(cfg, srv, "", true)
 
-		logit.Debug("Title: ", dp.Title, "col: ", topicCache[dp.Title], " command: ", dp.Command, " ", dp.Args)
+		logit.WithFields(log.Fields{
+			"title":       dp.Title,
+			"col":         topicCache[dp.Title],
+			"spreadsheet": cfg.SpreadsheetID,
+			"command":     dp.Command + " " + dp.Args,
+		}).Debug("Sheet and command info")
 
 		// Run the command
 		if len(dp.Command) > 0 {
@@ -319,14 +322,17 @@ func updateGoogleSheetValues(cfg *Config, srv *sheets.Service) {
 
 				// Update sheet
 				if theKey, ok := keyCache[key]; ok {
-					fmt.Printf("key: %s at pos: %s%d for %s => %s\n", key,
-						topicCache[dp.Title], theKey,
-						dp.Title, val)
-
 					// Prepare cell address and value
 					cell := cfg.SheetName + "!" + topicCache[dp.Title] + fmt.Sprintf("%d", theKey)
 					value := []interface{}{val}
 					vr.Values[0] = value
+
+					logit.WithFields(log.Fields{
+						"cell":        cell,
+						"spreadsheet": cfg.SpreadsheetID,
+						"key":         topicCache[dp.Title],
+						"val":         val,
+					}).Debug("Update value")
 
 					// We might hit the "Quota exceeded for quota group 'WriteGroup'"
 					r, _ := regexp.Compile("Error 429")
@@ -376,7 +382,9 @@ func updateGoogleSheetKPI(cfg *Config, srv *sheets.Service) {
 	year, week := tn.ISOWeek()
 	nowYearWeek := fmt.Sprintf("%d-%02d", year, week)
 	lastUpdateDate := time.Now().Format("2006-01-02")
-	logit.Info("Current Week is ", nowYearWeek)
+	logit.WithFields(log.Fields{
+		"date": nowYearWeek,
+	}).Debug("Current week")
 
 	// Calculate the Column letter for this week
 	dataWeekColLetter := sheetCellValueToSheetLetter(cfg, srv, nowYearWeek, false)
@@ -441,7 +449,11 @@ func updateGoogleSheetKPI(cfg *Config, srv *sheets.Service) {
 // scrapeEndpoint connects to an HTTP service and retrieves and matches a JSON encoded value
 // or runs and use the return number from an external command
 func scrapeEndpoint(kpi *KPIs) (bool, int) {
-	logit.Debug("Debug[", kpi.Title, "]: JSONEndpoint: '", kpi.JSONEndpoint, "'")
+	logit.WithFields(log.Fields{
+		"title":         kpi.Title,
+		"JSON-endpoint": kpi.JSONEndpoint,
+	}).Debug("Scraping endpoint")
+
 	var out int
 	// Run the Web scrape command (if defined)
 	if len(kpi.JSONEndpoint) > 0 {
@@ -502,7 +514,6 @@ func writeSheetCell(kpi *KPIs, action string, value []interface{},
 				"newValue":    value[0],
 			}).Warning("Skip ", action)
 
-			// fmt.Printf("Skip %s as %v != %v\n", action, resp.Values[0][0], value[0])
 			return errorCode["collision"]
 		}
 	}
@@ -542,7 +553,9 @@ func scrapeToJSON(uri string, dataPicker string) int {
 		logit.Fatal(err)
 	}
 	defer func() { _ = response.Body.Close() }()
-	logit.Debug("Response body: %s\n", response.Body)
+	logit.WithFields(log.Fields{
+		"body": response.Body,
+	}).Debug("Response body")
 
 	// Get the response body as a string
 	dataInBytes, err := ioutil.ReadAll(response.Body)
