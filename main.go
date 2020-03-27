@@ -275,8 +275,6 @@ func sheetCellValueToSheetRow(cfg *Config, srv *sheets.Service,
 // updateGoogleSheetValues updates the Google Spreadsheet
 func updateGoogleSheetValues(cfg *Config, srv *sheets.Service) {
 
-	// lastUpdateDate := time.Now().Format("2006-01-02")
-
 	// Generic value holder
 	var vr sheets.ValueRange
 	vr.Values = make([][]interface{}, 1)
@@ -335,7 +333,7 @@ func updateGoogleSheetValues(cfg *Config, srv *sheets.Service) {
 					}).Debug("Update value")
 
 					// We might hit the "Quota exceeded for quota group 'WriteGroup'"
-					r, _ := regexp.Compile("Error 429")
+					r, _ := regexp.Compile("Error 429|operation timed out")
 					iterations := 12
 					err = nil
 					for iterations > 0 {
@@ -350,13 +348,15 @@ func updateGoogleSheetValues(cfg *Config, srv *sheets.Service) {
 						}
 
 						if err != nil && iterations == 0 {
+
+							// We might want to try again if we simply time out
 							logit.WithFields(log.Fields{
 								"key":         key,
 								"error":       err,
 								"spreadsheet": cfg.SpreadsheetID,
 								"sheet":       cell,
 								"value":       value,
-							}).Fatal("Writing to sheet")
+							}).Fatal("Update Sheet Values") // Writing to sheet
 						}
 					}
 
@@ -531,7 +531,7 @@ func writeSheetCell(kpi *KPIs, action string, value []interface{},
 			"spreadsheet": cfg.SpreadsheetID,
 			"sheet":       cell,
 			"value":       value,
-		}).Fatal("Writing to sheet")
+		}).Fatal("Writing sheet cell") // Writing to sheet
 		return errorCode["synced"]
 	}
 	return errorCode["failed"]
