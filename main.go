@@ -61,6 +61,9 @@ type Datapoint struct {
 	Args    string `yaml:"args"`
 }
 
+// Stores the horizontal and vertical mapping, i.e:
+// topicCache["some topic"] = clmconv.Itoa(dataStartColNum + colCounter) /* I.e "AZ" */
+// keyCache["some key"] = sheetDataStartRow + rowCounter /* I.e 67 */
 var topicCache map[string]string
 var keyCache map[string]int
 
@@ -156,14 +159,15 @@ func main() {
 	logit.Info("Shutting down")
 }
 
-// sheetCellValueToSheetLetter calculates the Column letter for a cell value
-func sheetCellValueToSheetLetter(cfg *Config, srv *sheets.Service,
+// cellValueToSheetLetter reads a sheet row and caches the Column
+// letter for each cell value for conveniant lookup later on.
+func cellValueToSheetLetter(cfg *Config, srv *sheets.Service,
 	searchFor string, cache bool) string {
 
 	rowToSearch := cfg.SheetName + "!" + cfg.SheetDataStartCol +
 		cfg.SheetTopicRow + ":" + cfg.SheetTopicRow
-	resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID,
-		rowToSearch).Do()
+	resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID, rowToSearch).Do()
+	//resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID, rowToSearch).ValueRenderOption("UNFORMATTED_VALUE").Do()
 	if err != nil {
 		logit.WithFields(log.Fields{
 			"cell":        rowToSearch,
@@ -182,20 +186,20 @@ func sheetCellValueToSheetLetter(cfg *Config, srv *sheets.Service,
 			"spreadsheet": cfg.SpreadsheetID,
 		}).Fatal("Topic not found in sheet")
 	} else {
-		for colCounter, row := range resp.Values[0] {
+		for colCounter, topic := range resp.Values[0] {
 
 			if cache {
-				if _, ok := topicCache[fmt.Sprintf("%v", row)]; !ok {
-					if row != "" {
-						topicCache[fmt.Sprintf("%v", row)] = clmconv.Itoa(dataStartColNum + colCounter)
+				if _, ok := topicCache[fmt.Sprintf("%v", topic)]; !ok {
+					if topic != "" {
+						topicCache[fmt.Sprintf("%v", topic)] = clmconv.Itoa(dataStartColNum + colCounter)
 						logit.WithFields(log.Fields{
-							"topic": row,
-							"val":   clmconv.Itoa(dataStartColNum + colCounter),
-						}).Debug("Caching topic")
+							"topic":  topic,
+							"column": clmconv.Itoa(dataStartColNum + colCounter),
+						}).Debug("Caching topic to column letter")
 					}
 				}
 			}
-			if searchFor == row && offset == -1 {
+			if searchFor == topic && offset == -1 {
 				offset = colCounter
 				if !cache {
 					break // Break quickly if not a caching run
@@ -213,16 +217,17 @@ func sheetCellValueToSheetLetter(cfg *Config, srv *sheets.Service,
 	return clmconv.Itoa(dataStartColNum + offset)
 }
 
-// sheetCellValueToSheetRow calculates the Row number for a cell value
-func sheetCellValueToSheetRow(cfg *Config, srv *sheets.Service,
+// cellValueToSheetRow reads a sheet column and caches the Row
+// number for each cell value for conveniant lookup later on.
+func cellValueToSheetRow(cfg *Config, srv *sheets.Service,
 	searchFor string, cache bool) int {
 
 	sheetDataStartRow, _ := strconv.Atoi(cfg.SheetDataStartRow)
 	colToSearch := cfg.SheetName + "!" + cfg.SheetKeyCol +
 		fmt.Sprintf("%d", sheetDataStartRow) + ":" + cfg.SheetKeyCol
 
-	resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID,
-		colToSearch).Do()
+	resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID, colToSearch).Do()
+	//resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID, colToSearch).ValueRenderOption("UNFORMATTED_VALUE").Do()
 
 	if err != nil {
 		logit.WithFields(log.Fields{
@@ -242,20 +247,20 @@ func sheetCellValueToSheetRow(cfg *Config, srv *sheets.Service,
 		}).Fatal("Key not found in sheet")
 	} else {
 
-		for colCounter, col := range resp.Values {
+		for rowCounter, row := range resp.Values {
 
-			if cache && len(col) > 0 {
-				if _, ok := keyCache[fmt.Sprintf("%v", col[0])]; !ok {
-					keyCache[fmt.Sprintf("%v", col[0])] = sheetDataStartRow + colCounter
+			if cache && len(row) > 0 {
+				if _, ok := keyCache[fmt.Sprintf("%v", row[0])]; !ok {
+					keyCache[fmt.Sprintf("%v", row[0])] = sheetDataStartRow + rowCounter
 					logit.WithFields(log.Fields{
-						"key": col[0],
-						"val": sheetDataStartRow + colCounter,
-					}).Debug("Caching key")
+						"key": row[0],
+						"row": sheetDataStartRow + rowCounter,
+					}).Debug("Caching key to row number")
 				}
 			}
 
-			if len(col) > 0 && searchFor == col[0] && offset == -1 {
-				offset = colCounter
+			if len(row) > 0 && searchFor == row[0] && offset == -1 {
+				offset = rowCounter
 				if !cache {
 					break // Break quickly if not a caching run
 				}
@@ -266,7 +271,7 @@ func sheetCellValueToSheetRow(cfg *Config, srv *sheets.Service,
 		logit.WithFields(log.Fields{
 			"cell":        colToSearch,
 			"spreadsheet": cfg.SpreadsheetID,
-		}).Fatal("FIX: Add a new column for key")
+		}).Fatal("FIX: Add a new row for key")
 	}
 
 	return sheetDataStartRow + offset
@@ -279,14 +284,18 @@ func updateGoogleSheetValues(cfg *Config, srv *sheets.Service) {
 	var vr sheets.ValueRange
 	vr.Values = make([][]interface{}, 1)
 
+	sheetDataStartRow, _ := strconv.Atoi(cfg.SheetDataStartRow)
+
 	// Prepare to cache values
 	topicCache = make(map[string]string)
 	keyCache = make(map[string]int)
 
+	// Update for all data types in the configuration
 	for _, dp := range cfg.Datapoints {
 
-		_ = sheetCellValueToSheetLetter(cfg, srv, dp.Title, true)
-		_ = sheetCellValueToSheetRow(cfg, srv, "", true)
+		// Calculate the Column letter and Row number for a cell value
+		_ = cellValueToSheetLetter(cfg, srv, dp.Title, true)
+		_ = cellValueToSheetRow(cfg, srv, "", true)
 
 		logit.WithFields(log.Fields{
 			"title":       dp.Title,
@@ -309,67 +318,123 @@ func updateGoogleSheetValues(cfg *Config, srv *sheets.Service) {
 				}).Fatal("Running external command")
 			}
 
+			col := cfg.SheetName + "!" + topicCache[dp.Title] + cfg.SheetDataStartRow + ":" + topicCache[dp.Title]
+
+			// resp contains an interface of all values in the column
+			//resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID, col).Do() -- TEST REMOVE
+			resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID, col).ValueRenderOption("UNFORMATTED_VALUE").Do()
+
+			if err != nil {
+				logit.WithFields(log.Fields{
+					"col":         col,
+					"error":       err,
+					"spreadsheet": cfg.SpreadsheetID,
+				}).Fatal("Read col data from sheet")
+			}
+			sheetValues := resp.Values
+
+			// If some of the last cells in the data row
+			// has not values, the sheetValues array will be
+			// too short and we need to extend it to hold
+			// all the values we get.
+			sheetValuesLen := len(sheetValues)
+			if sheetValuesLen < len(keyCache) {
+				newSlice := make([][]interface{}, sheetValuesLen, len(keyCache))
+				copy(newSlice, sheetValues)
+				sheetValues = newSlice
+				sheetValues = sheetValues[0:len(keyCache)]
+
+				// Add storage type for all elements
+				for i := sheetValuesLen; i < len(keyCache); i++ {
+					sheetValues[i] = []interface{}{""}
+				}
+			}
+
 			// Lets use github.com/tidwall/gjson to decode
 			// JSON lines
 			json := string(tmpOut)
 
+			// Loop all results from the external command
+			// and compare to the values from the sheet
 			gjson.ForEachLine(json, func(line gjson.Result) bool {
 
+				// Get the key value pair from the scraping command
 				key := gjson.Get(line.String(), "key").String()
 				val := gjson.Get(line.String(), "val").String()
 
 				// Update sheet
-				if theKey, ok := keyCache[key]; ok {
-					// Prepare cell address and value
-					cell := cfg.SheetName + "!" + topicCache[dp.Title] + fmt.Sprintf("%d", theKey)
-					value := []interface{}{val}
-					vr.Values[0] = value
+				if sheetRowNum, ok := keyCache[key]; ok {
 
-					logit.WithFields(log.Fields{
-						"cell":        cell,
-						"spreadsheet": cfg.SpreadsheetID,
-						"key":         topicCache[dp.Title],
-						"val":         val,
-					}).Debug("Update value")
+					scrapeNum := sheetRowNum - sheetDataStartRow
 
-					// We might hit the "Quota exceeded for quota group 'WriteGroup'"
-					r, _ := regexp.Compile("Error 429|operation timed out")
-					iterations := 12
-					err = nil
-					for iterations > 0 {
-						_, err = srv.Spreadsheets.Values.Update(cfg.SpreadsheetID,
-							cell, &vr).ValueInputOption("USER_ENTERED").Do()
-						iterations--
-						if err != nil && r.MatchString(err.Error()) {
-							logit.Debug("Sleeping 10 sec")
-							time.Sleep(10000 * time.Millisecond)
-						} else {
-							iterations = 0
-						}
+					// Um, uninitialized sheetValue, lets make room to hold a value.
+					if len(sheetValues[scrapeNum]) == 0 {
+						sheetValues[scrapeNum] = []interface{}{""}
+					}
 
-						if err != nil && iterations == 0 {
+					if val != fmt.Sprintf("%v", sheetValues[scrapeNum][0]) {
 
-							// We might want to try again if we simply time out
-							logit.WithFields(log.Fields{
-								"key":         key,
-								"error":       err,
-								"spreadsheet": cfg.SpreadsheetID,
-								"sheet":       cell,
-								"value":       value,
-							}).Fatal("Update Sheet Values") // Writing to sheet
-						}
+						logit.WithFields(log.Fields{
+							"row":         scrapeNum,
+							"spreadsheet": cfg.SpreadsheetID,
+							"col":         topicCache[dp.Title],
+							"val":         val,
+							"old-val":     sheetValues[scrapeNum][0],
+						}).Debug("Updating value")
+
+						sheetValues[scrapeNum][0] = val
+
+					} else {
+						logit.WithFields(log.Fields{
+							"row":         scrapeNum,
+							"spreadsheet": cfg.SpreadsheetID,
+							"col":         topicCache[dp.Title],
+							"val":         val,
+							"old-val":     sheetValues[scrapeNum][0],
+						}).Debug("NOT updating value")
+
 					}
 
 				} else {
 					logit.WithFields(log.Fields{
 						"kpi": dp.Title,
 						"key": key,
-					}).Warning("Can not update key")
+					}).Warning("Can not update column")
 
 				}
 
 				return true
 			})
+
+			// Updated values to set in the sheet
+			vr.Values = sheetValues
+
+			// We might hit the "Quota exceeded for quota group 'WriteGroup'"
+			r, _ := regexp.Compile("Error 429|operation timed out")
+			iterations := 12
+			err = nil
+			for iterations > 0 {
+				_, err = srv.Spreadsheets.Values.Update(cfg.SpreadsheetID,
+					col, &vr).ValueInputOption("USER_ENTERED").Do()
+				iterations--
+
+				if err != nil && r.MatchString(err.Error()) {
+					logit.Debug("Sleeping 10 sec")
+					time.Sleep(10000 * time.Millisecond)
+				} else {
+					iterations = 0
+				}
+				if err != nil && iterations == 0 {
+
+					// We might want to try again if we simply time out
+					logit.WithFields(log.Fields{
+						"col":         col,
+						"error":       err,
+						"spreadsheet": cfg.SpreadsheetID,
+					}).Fatal("Update sheet column")
+				}
+			}
+
 		}
 	}
 }
@@ -387,7 +452,7 @@ func updateGoogleSheetKPI(cfg *Config, srv *sheets.Service) {
 	}).Debug("Current week")
 
 	// Calculate the Column letter for this week
-	dataWeekColLetter := sheetCellValueToSheetLetter(cfg, srv, nowYearWeek, false)
+	dataWeekColLetter := cellValueToSheetLetter(cfg, srv, nowYearWeek, false)
 
 	// Variables for each state for gauge metrics
 	//var valuesSynced, valuesCollision, valuesFailed int
@@ -494,8 +559,9 @@ func writeSheetCell(kpi *KPIs, action string, value []interface{},
 	// Check if existing vakue is an empty value or if it is the
 	// same value as we want to set.
 	if overwrite == 0 {
-		resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID,
-			cell).Do()
+		// resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID, cell).Do() -- TEST REMOVE
+		resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID, cell).ValueRenderOption("UNFORMATTED_VALUE").Do()
+
 		if err != nil {
 			logit.WithFields(log.Fields{
 				"cell":        cell,
@@ -522,8 +588,7 @@ func writeSheetCell(kpi *KPIs, action string, value []interface{},
 	}).Info(action)
 
 	vr.Values[0] = value
-	_, err := srv.Spreadsheets.Values.Update(cfg.SpreadsheetID,
-		cell, vr).ValueInputOption("USER_ENTERED").Do()
+	_, err := srv.Spreadsheets.Values.Update(cfg.SpreadsheetID, cell, vr).ValueInputOption("USER_ENTERED").Do()
 	if err != nil {
 		logit.WithFields(log.Fields{
 			"kpi":         kpi.Title,
@@ -531,7 +596,7 @@ func writeSheetCell(kpi *KPIs, action string, value []interface{},
 			"spreadsheet": cfg.SpreadsheetID,
 			"sheet":       cell,
 			"value":       value,
-		}).Fatal("Writing sheet cell") // Writing to sheet
+		}).Fatal("Writing sheet cell")
 		return errorCode["synced"]
 	}
 	return errorCode["failed"]
