@@ -41,7 +41,7 @@ type Config struct {
 	ChecksPathLive     string `yaml:"checks-path-live"`
 
 	Datapoints []Datapoint `yaml:"datapoints"`
-	KPI        []KPIs      `yaml:"KPI"`
+	KPI        []KPIs      `yaml:"KPI"` // Legacy actually, will be replaced over time
 }
 
 // The KPIs struct holds the array of KPIs
@@ -55,10 +55,15 @@ type KPIs struct {
 }
 
 // The Datapoint struct holds the array of KPIs
+// If split-on is defined, separate sheets named "<SheetName> <SplitOn value>"
+// If you specify add-rows, consider having free rows in the sheet
+// with relevant cell functions etc copied in.
 type Datapoint struct {
 	Title   string `yaml:"title"`
 	Command string `yaml:"command"`
 	Args    string `yaml:"args"`
+	AddRows string `yaml:"add-rows"` // Specify this if you want to add non-existing rows
+	SplitOn string `yaml:"split-on"` // Should values be distrubuted over a number of sheets?
 }
 
 // Stores the horizontal and vertical mapping, i.e:
@@ -164,7 +169,9 @@ func main() {
 func cellValueToSheetLetter(cfg *Config, srv *sheets.Service,
 	searchFor string, cache bool) string {
 
-	rowToSearch := cfg.SheetName + "!" + cfg.SheetDataStartCol +
+	//rowToSearch := cfg.SheetName + "!" + cfg.SheetDataStartCol +
+	//	cfg.SheetTopicRow + ":" + cfg.SheetTopicRow
+	rowToSearch := cfg.SheetName + "!" + "A" +
 		cfg.SheetTopicRow + ":" + cfg.SheetTopicRow
 	resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID, rowToSearch).Do()
 	//resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID, rowToSearch).ValueRenderOption("UNFORMATTED_VALUE").Do()
@@ -177,7 +184,7 @@ func cellValueToSheetLetter(cfg *Config, srv *sheets.Service,
 	}
 
 	// Calculate the column letter (cfg.SheetDataStartCol + offset)
-	dataStartColNum, err := clmconv.Atoi(cfg.SheetDataStartCol)
+	//dataStartColNum, err := clmconv.Atoi(cfg.SheetDataStartCol)
 
 	offset := -1 // The offset for this topic
 	if len(resp.Values) == 0 {
@@ -191,10 +198,12 @@ func cellValueToSheetLetter(cfg *Config, srv *sheets.Service,
 			if cache {
 				if _, ok := topicCache[fmt.Sprintf("%v", topic)]; !ok {
 					if topic != "" {
-						topicCache[fmt.Sprintf("%v", topic)] = clmconv.Itoa(dataStartColNum + colCounter)
+						//topicCache[fmt.Sprintf("%v", topic)] = clmconv.Itoa(dataStartColNum + colCounter)
+						topicCache[fmt.Sprintf("%v", topic)] = clmconv.Itoa(colCounter)
 						logit.WithFields(log.Fields{
-							"topic":  topic,
-							"column": clmconv.Itoa(dataStartColNum + colCounter),
+							"topic": topic,
+							//"column": clmconv.Itoa(dataStartColNum + colCounter),
+							"column": clmconv.Itoa(colCounter),
 						}).Debug("Caching topic to column letter")
 					}
 				}
@@ -214,7 +223,8 @@ func cellValueToSheetLetter(cfg *Config, srv *sheets.Service,
 		}).Fatal("FIX: Add a new column for topic")
 	}
 
-	return clmconv.Itoa(dataStartColNum + offset)
+	//return clmconv.Itoa(dataStartColNum + offset)
+	return clmconv.Itoa(offset)
 }
 
 // cellValueToSheetRow reads a sheet column and caches the Row
@@ -329,7 +339,7 @@ func updateGoogleSheetValues(cfg *Config, srv *sheets.Service) {
 					"col":         col,
 					"error":       err,
 					"spreadsheet": cfg.SpreadsheetID,
-				}).Fatal("Read col data from sheet")
+				}).Fatal("Read column data from sheet")
 			}
 			sheetValues := resp.Values
 
@@ -396,6 +406,18 @@ func updateGoogleSheetValues(cfg *Config, srv *sheets.Service) {
 					}
 
 				} else {
+
+					if dp.AddRows == "yes" {
+						// fmt.Printf("Lets add %s in the %s column\n", val, dp.Title)
+						sheetValues = append(sheetValues, []interface{}{val})
+					}
+					logit.WithFields(log.Fields{
+						"row":         len(sheetValues),
+						"spreadsheet": cfg.SpreadsheetID,
+						"col":         topicCache[dp.Title],
+						"val":         val,
+					}).Debug("Adding new row")
+
 					logit.WithFields(log.Fields{
 						"kpi": dp.Title,
 						"key": key,
