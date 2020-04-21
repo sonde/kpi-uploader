@@ -71,6 +71,7 @@ type Datapoint struct {
 // keyCache["some key"] = sheetDataStartRow + rowCounter /* I.e 67 */
 var topicCache map[string]string
 var keyCache map[string]int
+var keyCacheMax int
 
 // parseConfigYaml reads CONFIG_FILE or config.yaml,
 // access config ie: cfg.SpreadsheetID and cfg.KPI[0].Title
@@ -146,6 +147,20 @@ func main() {
 	logit.Info("Starting up")
 
 	cfg := parseConfigYaml(configYamlDefault)
+	// Echo main config parameters
+	logit.WithFields(log.Fields{
+		"spreadsheet-id":        cfg.SpreadsheetID,
+		"sheet-name":            cfg.SheetName,
+		"sheet-last-update-col": cfg.SheetLastUpdateCol,
+		"sheet-key-col":         cfg.SheetKeyCol,
+		"sheet-topic-row":       cfg.SheetTopicRow,
+		"sheet-data-start-col":  cfg.SheetDataStartCol,
+		"sheet-data-start-row":  cfg.SheetDataStartRow,
+		"ckecks-port":           cfg.CkecksPort,
+		"checks-path-metrics":   cfg.ChecksPathMetrics,
+		"checks-path-ready":     cfg.ChecksPathReady,
+		"checks-path-live":      cfg.ChecksPathLive,
+	}).Debug("Spreadsheet")
 
 	// go Serve(":8080", "/_/metrics", "/_/ready", "/_/alive", logit)
 	go Serve(cfg.CkecksPort, cfg.ChecksPathMetrics, cfg.ChecksPathReady,
@@ -198,11 +213,9 @@ func cellValueToSheetLetter(cfg *Config, srv *sheets.Service,
 			if cache {
 				if _, ok := topicCache[fmt.Sprintf("%v", topic)]; !ok {
 					if topic != "" {
-						//topicCache[fmt.Sprintf("%v", topic)] = clmconv.Itoa(dataStartColNum + colCounter)
 						topicCache[fmt.Sprintf("%v", topic)] = clmconv.Itoa(colCounter)
 						logit.WithFields(log.Fields{
-							"topic": topic,
-							//"column": clmconv.Itoa(dataStartColNum + colCounter),
+							"topic":  topic,
 							"column": clmconv.Itoa(colCounter),
 						}).Debug("Caching topic to column letter")
 					}
@@ -231,6 +244,10 @@ func cellValueToSheetLetter(cfg *Config, srv *sheets.Service,
 // number for each cell value for conveniant lookup later on.
 func cellValueToSheetRow(cfg *Config, srv *sheets.Service,
 	searchFor string, cache bool) int {
+
+	if cache {
+		keyCacheMax = len(keyCache)
+	}
 
 	sheetDataStartRow, _ := strconv.Atoi(cfg.SheetDataStartRow)
 	colToSearch := cfg.SheetName + "!" + cfg.SheetKeyCol +
@@ -262,6 +279,9 @@ func cellValueToSheetRow(cfg *Config, srv *sheets.Service,
 			if cache && len(row) > 0 {
 				if _, ok := keyCache[fmt.Sprintf("%v", row[0])]; !ok {
 					keyCache[fmt.Sprintf("%v", row[0])] = sheetDataStartRow + rowCounter
+					if keyCacheMax < sheetDataStartRow {
+						keyCacheMax = sheetDataStartRow
+					}
 					logit.WithFields(log.Fields{
 						"key": row[0],
 						"row": sheetDataStartRow + rowCounter,
@@ -331,7 +351,6 @@ func updateGoogleSheetValues(cfg *Config, srv *sheets.Service) {
 			col := cfg.SheetName + "!" + topicCache[dp.Title] + cfg.SheetDataStartRow + ":" + topicCache[dp.Title]
 
 			// resp contains an interface of all values in the column
-			//resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID, col).Do() -- TEST REMOVE
 			resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID, col).ValueRenderOption("UNFORMATTED_VALUE").Do()
 
 			if err != nil {
@@ -348,14 +367,19 @@ func updateGoogleSheetValues(cfg *Config, srv *sheets.Service) {
 			// too short and we need to extend it to hold
 			// all the values we get.
 			sheetValuesLen := len(sheetValues)
-			if sheetValuesLen < len(keyCache) {
-				newSlice := make([][]interface{}, sheetValuesLen, len(keyCache))
+			if sheetValuesLen < keyCacheMax {
+				logit.WithFields(log.Fields{
+					"rows":        keyCacheMax + 1 - sheetValuesLen,
+					"spreadsheet": cfg.SpreadsheetID,
+					"col":         topicCache[dp.Title],
+				}).Debug("Extending sheetValues")
+				newSlice := make([][]interface{}, sheetValuesLen, keyCacheMax+1)
 				copy(newSlice, sheetValues)
 				sheetValues = newSlice
-				sheetValues = sheetValues[0:len(keyCache)]
+				sheetValues = sheetValues[0 : keyCacheMax+1]
 
 				// Add storage type for all elements
-				for i := sheetValuesLen; i < len(keyCache); i++ {
+				for i := sheetValuesLen; i <= keyCacheMax; i++ {
 					sheetValues[i] = []interface{}{""}
 				}
 			}
@@ -388,6 +412,7 @@ func updateGoogleSheetValues(cfg *Config, srv *sheets.Service) {
 							"row":         scrapeNum,
 							"spreadsheet": cfg.SpreadsheetID,
 							"col":         topicCache[dp.Title],
+							"key":         key,
 							"val":         val,
 							"old-val":     sheetValues[scrapeNum][0],
 						}).Debug("Updating value")
@@ -399,6 +424,7 @@ func updateGoogleSheetValues(cfg *Config, srv *sheets.Service) {
 							"row":         scrapeNum,
 							"spreadsheet": cfg.SpreadsheetID,
 							"col":         topicCache[dp.Title],
+							"key":         key,
 							"val":         val,
 							"old-val":     sheetValues[scrapeNum][0],
 						}).Debug("NOT updating value")
@@ -408,20 +434,37 @@ func updateGoogleSheetValues(cfg *Config, srv *sheets.Service) {
 				} else {
 
 					if dp.AddRows == "yes" {
-						// fmt.Printf("Lets add %s in the %s column\n", val, dp.Title)
+						logit.WithFields(log.Fields{
+							"spreadsheet": cfg.SpreadsheetID,
+							"col":         topicCache[dp.Title],
+							"key":         key,
+							"val":         val,
+						}).Debug("Appending column")
 						sheetValues = append(sheetValues, []interface{}{val})
-					}
-					logit.WithFields(log.Fields{
-						"row":         len(sheetValues),
-						"spreadsheet": cfg.SpreadsheetID,
-						"col":         topicCache[dp.Title],
-						"val":         val,
-					}).Debug("Adding new row")
+						sheetValues = sheetValues[0:len(sheetValues)]
+						keyCacheMax = len(sheetValues) - 1
 
-					logit.WithFields(log.Fields{
-						"kpi": dp.Title,
-						"key": key,
-					}).Warning("Can not update column")
+						// If the column being updated is the keys column,
+						// we have to add a new value to the keyCache
+						if topicCache[dp.Title] == cfg.SheetKeyCol {
+							keyCache[fmt.Sprintf("%v", val)] = sheetDataStartRow + keyCacheMax
+						}
+
+						logit.WithFields(log.Fields{
+							"row":         len(sheetValues),
+							"spreadsheet": cfg.SpreadsheetID,
+							"col":         topicCache[dp.Title],
+							"key":         key,
+							"val":         val,
+						}).Debug("Adding new row")
+
+					} else {
+
+						logit.WithFields(log.Fields{
+							"kpi": dp.Title,
+							"key": key,
+						}).Warning("Can not update column")
+					}
 
 				}
 
@@ -581,7 +624,6 @@ func writeSheetCell(kpi *KPIs, action string, value []interface{},
 	// Check if existing vakue is an empty value or if it is the
 	// same value as we want to set.
 	if overwrite == 0 {
-		// resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID, cell).Do() -- TEST REMOVE
 		resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID, cell).ValueRenderOption("UNFORMATTED_VALUE").Do()
 
 		if err != nil {
