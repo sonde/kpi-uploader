@@ -279,8 +279,8 @@ func cellValueToSheetRow(cfg *Config, srv *sheets.Service,
 			if cache && len(row) > 0 {
 				if _, ok := keyCache[fmt.Sprintf("%v", row[0])]; !ok {
 					keyCache[fmt.Sprintf("%v", row[0])] = sheetDataStartRow + rowCounter
-					if keyCacheMax < sheetDataStartRow {
-						keyCacheMax = sheetDataStartRow
+					if keyCacheMax < rowCounter {
+						keyCacheMax = rowCounter
 					}
 					logit.WithFields(log.Fields{
 						"key": row[0],
