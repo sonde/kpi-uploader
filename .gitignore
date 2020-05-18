@@ -4,5 +4,5 @@ secret.json
 TODO.md
 etc
 var/*
-bin/*
+bin
 .DS_Store
