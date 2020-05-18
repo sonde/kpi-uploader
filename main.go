@@ -33,7 +33,6 @@ type Config struct {
 	SheetLastUpdateCol string `yaml:"sheet-last-update-col"`
 	SheetKeyCol        string `yaml:"sheet-key-col"`
 	SheetTopicRow      string `yaml:"sheet-topic-row"`
-	SheetDataStartCol  string `yaml:"sheet-data-start-col"`
 	SheetDataStartRow  string `yaml:"sheet-data-start-row"`
 	CkecksPort         string `yaml:"ckecks-port"`
 	ChecksPathMetrics  string `yaml:"checks-path-metrics"`
@@ -55,15 +54,17 @@ type KPIs struct {
 }
 
 // The Datapoint struct holds the array of KPIs
-// If split-on is defined, separate sheets named "<SheetName> <SplitOn value>"
-// If you specify add-rows, consider having free rows in the sheet
+// Specifying add-rows works best when prepolulating some extra rows with required cell functions
 // with relevant cell functions etc copied in.
 type Datapoint struct {
-	Title   string `yaml:"title"`
-	Command string `yaml:"command"`
-	Args    string `yaml:"args"`
-	AddRows string `yaml:"add-rows"` // Specify this if you want to add non-existing rows
-	SplitOn string `yaml:"split-on"` // Should values be distrubuted over a number of sheets?
+	Title     string `yaml:"title"`
+	Command   string `yaml:"command"`
+	Args      string `yaml:"args"`
+	AddRows   string `yaml:"add-rows"`   // Specify this if you want to add non-existing rows
+	SheetName string `yaml:"sheet-name"` // Override the default sheet name if you need to
+
+	Cell  string `yaml:"cell"`  // Optinal specification of a single cell
+	Value string `yaml:"value"` // combined with a single value to f.i set an "Updating" message
 }
 
 // Stores the horizontal and vertical mapping, i.e:
@@ -154,7 +155,6 @@ func main() {
 		"sheet-last-update-col": cfg.SheetLastUpdateCol,
 		"sheet-key-col":         cfg.SheetKeyCol,
 		"sheet-topic-row":       cfg.SheetTopicRow,
-		"sheet-data-start-col":  cfg.SheetDataStartCol,
 		"sheet-data-start-row":  cfg.SheetDataStartRow,
 		"ckecks-port":           cfg.CkecksPort,
 		"checks-path-metrics":   cfg.ChecksPathMetrics,
@@ -184,8 +184,6 @@ func main() {
 func cellValueToSheetLetter(cfg *Config, srv *sheets.Service,
 	searchFor string, cache bool) string {
 
-	//rowToSearch := cfg.SheetName + "!" + cfg.SheetDataStartCol +
-	//	cfg.SheetTopicRow + ":" + cfg.SheetTopicRow
 	rowToSearch := cfg.SheetName + "!" + "A" +
 		cfg.SheetTopicRow + ":" + cfg.SheetTopicRow
 	resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID, rowToSearch).Do()
@@ -197,9 +195,6 @@ func cellValueToSheetLetter(cfg *Config, srv *sheets.Service,
 			"spreadsheet": cfg.SpreadsheetID,
 		}).Fatal("Read col data from sheet")
 	}
-
-	// Calculate the column letter (cfg.SheetDataStartCol + offset)
-	//dataStartColNum, err := clmconv.Atoi(cfg.SheetDataStartCol)
 
 	offset := -1 // The offset for this topic
 	if len(resp.Values) == 0 {
@@ -269,9 +264,9 @@ func cellValueToSheetRow(cfg *Config, srv *sheets.Service,
 	offset := -1 // The offset for this row
 	if len(resp.Values) == 0 {
 		logit.WithFields(log.Fields{
-			"cell":        colToSearch,
+			"col":         colToSearch,
 			"spreadsheet": cfg.SpreadsheetID,
-		}).Fatal("Key not found in sheet")
+		}).Fatal("No data found in col")
 	} else {
 
 		for rowCounter, row := range resp.Values {
@@ -334,6 +329,9 @@ func updateGoogleSheetValues(cfg *Config, srv *sheets.Service) {
 			"command":     dp.Command + " " + dp.Args,
 		}).Debug("Sheet and command info")
 
+		var sheetValues [][]interface{}
+		col := cfg.SheetName + "!" + topicCache[dp.Title] + cfg.SheetDataStartRow + ":" + topicCache[dp.Title]
+
 		// Run the command
 		if len(dp.Command) > 0 {
 
@@ -348,8 +346,6 @@ func updateGoogleSheetValues(cfg *Config, srv *sheets.Service) {
 				}).Fatal("Running external command")
 			}
 
-			col := cfg.SheetName + "!" + topicCache[dp.Title] + cfg.SheetDataStartRow + ":" + topicCache[dp.Title]
-
 			// resp contains an interface of all values in the column
 			resp, err := srv.Spreadsheets.Values.Get(cfg.SpreadsheetID, col).ValueRenderOption("UNFORMATTED_VALUE").Do()
 
@@ -360,7 +356,7 @@ func updateGoogleSheetValues(cfg *Config, srv *sheets.Service) {
 					"spreadsheet": cfg.SpreadsheetID,
 				}).Fatal("Read column data from sheet")
 			}
-			sheetValues := resp.Values
+			sheetValues = resp.Values
 
 			// If some of the last cells in the data row
 			// has not values, the sheetValues array will be
@@ -471,36 +467,54 @@ func updateGoogleSheetValues(cfg *Config, srv *sheets.Service) {
 				return true
 			})
 
-			// Updated values to set in the sheet
-			vr.Values = sheetValues
-
-			// We might hit the "Quota exceeded for quota group 'WriteGroup'"
-			r, _ := regexp.Compile("Error 429|operation timed out")
-			iterations := 12
-			err = nil
-			for iterations > 0 {
-				_, err = srv.Spreadsheets.Values.Update(cfg.SpreadsheetID,
-					col, &vr).ValueInputOption("USER_ENTERED").Do()
-				iterations--
-
-				if err != nil && r.MatchString(err.Error()) {
-					logit.Debug("Sleeping 10 sec")
-					time.Sleep(10000 * time.Millisecond)
-				} else {
-					iterations = 0
-				}
-				if err != nil && iterations == 0 {
-
-					// We might want to try again if we simply time out
-					logit.WithFields(log.Fields{
-						"col":         col,
-						"error":       err,
-						"spreadsheet": cfg.SpreadsheetID,
-					}).Fatal("Update sheet column")
-				}
-			}
-
 		}
+
+		// HERE: FIXME: add support for adding a spesific value for a cell
+		/*
+			// If no cell and value is set, use it and break off
+			if len(sheetValues) == 0 {
+				if dp.Value != "" {
+
+				} else {
+					logit.WithFields(log.Fields{
+						"kpi": dp.Title,
+						"key": key,
+					}).Warning("Can not update column")
+					break
+				}
+
+			}
+		*/
+
+		// Updated values to set in the sheet
+		vr.Values = sheetValues
+
+		// We might hit the "Quota exceeded for quota group 'WriteGroup'"
+		r, _ := regexp.Compile("Error 429|operation timed out")
+		iterations := 12
+		var err error
+		for iterations > 0 {
+			_, err = srv.Spreadsheets.Values.Update(cfg.SpreadsheetID,
+				col, &vr).ValueInputOption("USER_ENTERED").Do()
+			iterations--
+
+			if err != nil && r.MatchString(err.Error()) {
+				logit.Debug("Sleeping 10 sec")
+				time.Sleep(10000 * time.Millisecond)
+			} else {
+				iterations = 0
+			}
+			if err != nil && iterations == 0 {
+
+				// We might want to try again if we simply time out
+				logit.WithFields(log.Fields{
+					"col":         col,
+					"error":       err,
+					"spreadsheet": cfg.SpreadsheetID,
+				}).Fatal("Update sheet column")
+			}
+		}
+
 	}
 }
 
